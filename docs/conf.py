@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.abspath("../src"))
+sys.path.insert(0, os.path.abspath(".."))
 
 project = "skyplot"
 author = "Skyplot Developers"
@@ -23,7 +23,7 @@ extensions = [
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-html_theme = "pydata_sphinx_theme"
+html_theme = "shibuya"
 html_static_path = ["_static"]
 
 autodoc_typehints = "description"
