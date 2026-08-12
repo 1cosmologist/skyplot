@@ -8,8 +8,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(".."))
 
-project = "skyplot"
-author = "Skyplot Developers"
+project = "SkyPlot"
+author = "Shamik Ghosh"
 copyright = f"{datetime.now().year}, {author}"
 release = "0.1.0"
 
