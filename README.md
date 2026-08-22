@@ -1,6 +1,6 @@
 # SkyPlot
 
-`SkyPlot` is a Python package for visualizing CMB and other astrophysical sky maps stored as HEALPix arrays.
+`SkyPlot` is a Python package for visualizing CMB and other astrophysical sky maps stored as HEALPix arrays or `pixell.ndmap`.
 It samples maps with `healpy` at configurable angular coordinates and renders them with Matplotlib + Cartopy using `pcolormesh`.
 
 ## Features
@@ -12,7 +12,7 @@ It samples maps with `healpy` at configurable angular coordinates and renders th
 - Supported projections include `mollweide`, `orthographic`, `platecarree`, `equidistantconic`
 - Uses geographic transforms (`PlateCarree`) so full-sky data is projected consistently
 - `cmap` accepts Matplotlib colormap names and names from the `colormaps` package
-- HTML/JSON export plus static export (`png`, `jpg`, `webp`, `svg`, `pdf`, `eps`)
+- Multiple export formats (`png`, `jpg`, `svg`, `pdf`, `eps`)
 - Bundled fontset support: packaged fonts can become the default sans-serif stack automatically
 
 ## Quick start
@@ -52,7 +52,7 @@ pip install -e .[dev,docs]
 pytest
 ```
 
-## Custom fontset packaging
+<!-- ## Custom fontset packaging
 
 To ship a custom sans-serif fontset with this package:
 
@@ -67,7 +67,7 @@ from skyplot import register_package_fonts, configure_default_sans_serif
 
 register_package_fonts()
 configure_default_sans_serif()
-```
+``` -->
 
 ## Documentation
 
