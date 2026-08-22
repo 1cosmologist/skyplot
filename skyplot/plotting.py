@@ -1,3 +1,26 @@
+#######################################################################
+# This file is a part of SkyPlot
+#
+# SkyPlot
+# Copyright (C) 2026  Shamik Ghosh
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# For more information about SkyPlot please visit 
+# <https://github.com/1cosmologist/skyplot> or contact Shamik Ghosh 
+# at shamik@lbl.gov
+#
+#########################################################################
+
 """Matplotlib + Cartopy visualization routines for HEALPix sky maps."""
 
 from __future__ import annotations
@@ -9,6 +32,8 @@ import matplotlib.ticker as mticker
 import numpy as np
 from matplotlib.colors import Colormap, ListedColormap, Normalize
 from matplotlib.figure import Figure
+
+from importlib import resources
 
 from .sampling import make_theta_phi_grid, sample_at_angles, sample_full_sky
 
@@ -209,6 +234,10 @@ def _resolve_cmap(cmap: str | Sequence[Any]) -> str | Colormap:
         return cmap
     except Exception:
         pass
+
+    if cmap in ["planck", "planck_log"]:
+        cmap_path = resources.files("skyplot.data").joinpath(f"{cmap}.dat")
+        return ListedColormap(np.loadtxt(cmap_path) / 255.0, cmap)
 
     try:
         cm = import_module("colormaps")
