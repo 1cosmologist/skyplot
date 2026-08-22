@@ -2,35 +2,45 @@
 
 from __future__ import annotations
 
-import base64
-import io
-import json
 from pathlib import Path
 from typing import Literal
 
 from matplotlib.figure import Figure
 
-_INTERACTIVE_FORMATS = {"html", "json"}
-_STATIC_FORMATS = {"png", "jpg", "jpeg", "webp", "svg", "pdf", "eps"}
+_FORMATS = {"png", "jpg", "jpeg", "svg", "pdf", "eps"}
 
 
 def save_figure(
-    fig: Figure,
-    output_path: str | Path,
+    fig: Figure | None = None,
+    output_path: str | Path | None = None,
     *,
-    output_format: Literal[
-        "html", "json", "png", "jpg", "jpeg", "webp", "svg", "pdf", "eps"
-    ]
-    | None = None,
+    output_format: Literal["png", "jpg", "jpeg", "svg", "pdf", "eps"] | None = None,
     width: int | None = None,
     height: int | None = None,
     figsize: tuple[float, float] = (12.0, 6.0),
     dpi: int = 300,
     scale: float = 1.0,
-    auto_open: bool = False,
 ) -> Path:
-    """Save a Matplotlib figure to HTML, JSON, or static image formats.
+    """Save a Matplotlib figure to a static image format.
+
+    If ``fig`` is omitted, the most recently created skyplot figure is used.
     """
+    # Allow save_figure("path.png") by shifting a path passed as `fig`.
+    if isinstance(fig, (str, Path)):
+        if output_path is not None:
+            raise TypeError("output_path was passed both as `fig` and `output_path`.")
+        fig, output_path = None, fig
+
+    if output_path is None:
+        raise ValueError("output_path is required.")
+
+    if fig is None:
+        from .plotting import _get_last_figure
+
+        fig = _get_last_figure()
+        if fig is None:
+            raise ValueError("No figure provided and no skyplot figure has been created yet.")
+
     out = Path(output_path)
 
     if dpi <= 0:
@@ -51,40 +61,7 @@ def save_figure(
 
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    if fmt == "json":
-        payload = getattr(fig, "_skyplot_payload", None)
-        if payload is None:
-            payload = {
-                "backend": "matplotlib",
-                "axes": len(fig.axes),
-                "size_inches": list(fig.get_size_inches()),
-                "dpi": float(fig.dpi),
-            }
-        out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        return out
-
-    if fmt == "html":
-        # Emit a simple standalone HTML page with embedded PNG.
-        img_buf = io.BytesIO()
-        export_dpi = int(round(dpi * scale))
-        fig.set_size_inches(figsize[0], figsize[1], forward=True)
-        fig.savefig(img_buf, format="png", dpi=export_dpi, bbox_inches="tight")
-        img_b64 = base64.b64encode(img_buf.getvalue()).decode("ascii")
-        html = (
-            "<!doctype html>\n"
-            "<html><head><meta charset='utf-8'><title>skyplot export</title></head>\n"
-            "<body style='margin:0;background:#ffffff;'>\n"
-            f"<img alt='skyplot figure' style='display:block;max-width:100%;height:auto;margin:0 auto;' src='data:image/png;base64,{img_b64}'/>\n"
-            "</body></html>\n"
-        )
-        out.write_text(html, encoding="utf-8")
-        if auto_open:
-            import webbrowser
-
-            webbrowser.open(out.resolve().as_uri())
-        return out
-
-    if fmt in _STATIC_FORMATS:
+    if fmt in _FORMATS:
         export_dpi = int(round(dpi * scale))
 
         if width is not None or height is not None:
@@ -97,7 +74,7 @@ def save_figure(
         fig.savefig(out, format=fmt, dpi=export_dpi, bbox_inches="tight")
         return out
 
-    supported = sorted(_INTERACTIVE_FORMATS | _STATIC_FORMATS)
+    supported = sorted(_FORMATS)
     raise ValueError(
         f"Unsupported output format '{fmt}'. Supported formats: {', '.join(supported)}"
     )

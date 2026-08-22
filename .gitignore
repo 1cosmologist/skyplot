@@ -28,6 +28,8 @@ builddir/
 out/
 coverage/
 
+notebooks/
+
 # Python
 __pycache__/
 *.py[cod]

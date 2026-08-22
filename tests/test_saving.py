@@ -1,10 +1,9 @@
 """Tests for skyplot saving utilities."""
 
-import json
-
 import healpy as hp
 import matplotlib
 import numpy as np
+import pytest
 
 matplotlib.use("Agg")
 
@@ -12,17 +11,16 @@ from skyplot.plotting import mollweide
 from skyplot.saving import save_figure
 
 
-def test_save_figure_json_with_explicit_format(tmp_path) -> None:
+def test_save_figure_svg_with_explicit_format(tmp_path) -> None:
     nside = 8
     hp_map = np.random.default_rng(0).normal(size=hp.nside2npix(nside))
     fig = mollweide(hp_map, resolution="low")
 
-    out = save_figure(fig, tmp_path / "map_export", output_format="json")
+    out = save_figure(fig, tmp_path / "map_export", output_format="svg")
 
-    assert out.suffix == ".json"
-    payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["backend"] == "matplotlib-cartopy"
-    assert "projection" in payload
+    assert out.suffix == ".svg"
+    assert out.exists()
+    assert out.stat().st_size > 0
 
 
 def test_save_figure_png(tmp_path) -> None:
@@ -37,14 +35,10 @@ def test_save_figure_png(tmp_path) -> None:
     assert out.stat().st_size > 0
 
 
-def test_save_figure_html(tmp_path) -> None:
+def test_save_figure_unsupported_format(tmp_path) -> None:
     nside = 8
     hp_map = np.random.default_rng(2).normal(size=hp.nside2npix(nside))
     fig = mollweide(hp_map, resolution="low")
 
-    out = save_figure(fig, tmp_path / "map.html")
-
-    assert out.exists()
-    text = out.read_text(encoding="utf-8")
-    assert "<img" in text
-    assert "data:image/png;base64" in text
+    with pytest.raises(ValueError):
+        save_figure(fig, tmp_path / "map.webp")

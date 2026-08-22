@@ -7,7 +7,7 @@ from typing import Any, Callable, Literal, Sequence
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
-from matplotlib.colors import Colormap, ListedColormap
+from matplotlib.colors import Colormap, ListedColormap, Normalize
 from matplotlib.figure import Figure
 
 from .sampling import make_theta_phi_grid, sample_at_angles, sample_full_sky
@@ -38,6 +38,13 @@ RESOLUTION_PRESETS: dict[str, tuple[int, int]] = {
     "medium": (720, 1440),
     "high": (1440, 2880),
 }
+
+_last_figure: Figure | None = None
+
+
+def _get_last_figure() -> Figure | None:
+    """Return the most recently created skyplot figure, if any."""
+    return _last_figure
 
 
 def _validate_extent(extent: Sequence[float] | None) -> tuple[float, float, float, float] | None:
@@ -380,6 +387,7 @@ def _plot_with_projection(
     cmap: str | Sequence[Any] = "viridis",
     vmin: float | None = None,
     vmax: float | None = None,
+    norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
@@ -442,6 +450,7 @@ def _plot_with_projection(
     lat = lat[lat_sort_idx, :]
     values = values[lat_sort_idx, :]
 
+    created_fig = ax is None
     if ax is None:
         map_crs = projection_factory(**projection_kwargs)
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi, subplot_kw={"projection": map_crs})
@@ -481,6 +490,7 @@ def _plot_with_projection(
         cmap=resolved_cmap,
         vmin=vmin,
         vmax=vmax,
+        norm=norm,
         **mesh_kwargs,
     )
 
@@ -509,6 +519,7 @@ def _plot_with_projection(
         "shape": [int(values.shape[0]), int(values.shape[1])],
         "vmin": vmin,
         "vmax": vmax,
+        "norm": str(norm) if norm is not None else None,
         "cmap": str(cmap),
         "colorbar_title": colorbar_title,
         "title": title,
@@ -520,6 +531,14 @@ def _plot_with_projection(
         "lat_gridline_spacing_deg": applied_gridline_kwargs["lat_gridline_spacing_deg"],
         "colorbar_orientation": "horizontal",
     }
+
+    # Prevent matplotlib's Jupyter inline backend from auto-displaying this
+    # figure a second time in addition to the one shown via the return value.
+    if created_fig:
+        plt.close(fig)
+
+    global _last_figure
+    _last_figure = fig
 
     return fig
 
@@ -538,6 +557,7 @@ def mollweide(
     cmap: str | Sequence[Any] = "viridis",
     vmin: float | None = None,
     vmax: float | None = None,
+    norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
@@ -575,6 +595,10 @@ def mollweide(
         Colormap name or colormap-like values.
     vmin, vmax : float or None, optional
         Color scaling bounds.
+    norm : str or matplotlib.colors.Normalize or None, optional
+        Normalization applied to map values before colormapping, forwarded to
+        ``ax.pcolormesh``. Accepts a registered Matplotlib scale name (e.g.
+        ``"log"``) or a ``Normalize`` instance.
     colorbar_title : str, optional
         Label text for the colorbar.
     title : str or None, optional
@@ -614,6 +638,7 @@ def mollweide(
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
+        norm=norm,
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
@@ -639,6 +664,7 @@ def orthographic(
     cmap: str | Sequence[Any] = "viridis",
     vmin: float | None = None,
     vmax: float | None = None,
+    norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
@@ -660,7 +686,7 @@ def orthographic(
         WCS object used for 2D map inputs.
     ax : Any or None, optional
         Existing GeoAxes to draw into for overlay workflows.
-    n_theta, n_phi, resolution, nest, interpolate, cmap, vmin, vmax,
+    n_theta, n_phi, resolution, nest, interpolate, cmap, vmin, vmax, norm,
     colorbar_title, title, show_gridlines, gridline_kwargs,
     pcolormesh_kwargs, add_colorbar, figsize, dpi
         Same behavior as :func:`mollweide`.
@@ -686,6 +712,7 @@ def orthographic(
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
+        norm=norm,
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
@@ -711,6 +738,7 @@ def platecarree(
     cmap: str | Sequence[Any] = "viridis",
     vmin: float | None = None,
     vmax: float | None = None,
+    norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
@@ -732,7 +760,7 @@ def platecarree(
         WCS object used for 2D map inputs.
     ax : Any or None, optional
         Existing GeoAxes to draw into for overlay workflows.
-    n_theta, n_phi, resolution, nest, interpolate, cmap, vmin, vmax,
+    n_theta, n_phi, resolution, nest, interpolate, cmap, vmin, vmax, norm,
     colorbar_title, title, show_gridlines, gridline_kwargs,
     pcolormesh_kwargs, add_colorbar, figsize, dpi
         Same behavior as :func:`mollweide`.
@@ -758,6 +786,7 @@ def platecarree(
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
+        norm=norm,
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
@@ -784,6 +813,7 @@ def equidistantconic(
     cmap: str | Sequence[Any] = "viridis",
     vmin: float | None = None,
     vmax: float | None = None,
+    norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
@@ -810,7 +840,7 @@ def equidistantconic(
         WCS object used for 2D map inputs.
     ax : Any or None, optional
         Existing GeoAxes to draw into for overlay workflows.
-    n_theta, n_phi, resolution, nest, interpolate, cmap, vmin, vmax,
+    n_theta, n_phi, resolution, nest, interpolate, cmap, vmin, vmax, norm,
     colorbar_title, title, show_gridlines, gridline_kwargs,
     pcolormesh_kwargs, add_colorbar, figsize, dpi
         Same behavior as :func:`mollweide`.
@@ -859,6 +889,7 @@ def equidistantconic(
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
+        norm=norm,
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
@@ -876,6 +907,8 @@ def gnomonic(
     center: Sequence[float] = (0.0, 0.0),
     xsize: int = 500,
     ysize: int = 500,
+    n_theta: int | None = None,
+    n_phi: int | None = None,
     pixel_size_arcmin: float = 5.0,
     wcs: Any | None = None,
     ax: Any | None = None,
@@ -884,6 +917,7 @@ def gnomonic(
     cmap: str | Sequence[Any] = "viridis",
     vmin: float | None = None,
     vmax: float | None = None,
+    norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
     add_colorbar: bool = True,
@@ -904,6 +938,10 @@ def gnomonic(
         Tangent point as ``(lon_deg, lat_deg)``.
     xsize, ysize : int, optional
         Patch size in pixels along x/y.
+    n_theta, n_phi : int or None, optional
+        Convenience overrides for ``ysize``/``xsize`` respectively, so
+        :func:`gnomonic` can be called interchangeably with the other
+        projection functions.
     pixel_size_arcmin : float, optional
         Angular size per pixel in arcminutes.
     wcs : Any or None, optional
@@ -914,6 +952,10 @@ def gnomonic(
     nest, interpolate, cmap, vmin, vmax, colorbar_title, title, add_colorbar,
     figsize, dpi
         Same behavior as :func:`mollweide` where applicable.
+    norm : str or matplotlib.colors.Normalize or None, optional
+        Normalization applied to map values before colormapping, forwarded to
+        ``ax.imshow``. Accepts a registered Matplotlib scale name (e.g.
+        ``"log"``) or a ``Normalize`` instance.
     astro_orientation : bool, optional
         If True, invert the x-axis so longitude increases to the left.
     imshow_kwargs : dict[str, Any] or None, optional
@@ -928,6 +970,10 @@ def gnomonic(
         raise ValueError("dpi must be a positive integer.")
     if len(figsize) != 2 or figsize[0] <= 0.0 or figsize[1] <= 0.0:
         raise ValueError("figsize must be a two-element tuple of positive values.")
+    if n_theta is not None:
+        ysize = n_theta
+    if n_phi is not None:
+        xsize = n_phi
     if xsize <= 0 or ysize <= 0:
         raise ValueError("xsize and ysize must be positive integers.")
     if pixel_size_arcmin <= 0.0:
@@ -968,6 +1014,7 @@ def gnomonic(
             interpolate=interpolate,
         )
 
+    created_fig = ax is None
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     else:
@@ -993,6 +1040,7 @@ def gnomonic(
         cmap=resolved_cmap,
         vmin=vmin,
         vmax=vmax,
+        norm=norm,
         extent=extent,
         **draw_kwargs,
     )
@@ -1033,11 +1081,20 @@ def gnomonic(
         "shape": [int(values.shape[0]), int(values.shape[1])],
         "vmin": vmin,
         "vmax": vmax,
+        "norm": str(norm) if norm is not None else None,
         "cmap": str(cmap),
         "colorbar_title": colorbar_title,
         "title": title,
         "show_gridlines": False,
         "colorbar_orientation": "horizontal",
     }
+
+    # Prevent matplotlib's Jupyter inline backend from auto-displaying this
+    # figure a second time in addition to the one shown via the return value.
+    if created_fig:
+        plt.close(fig)
+
+    global _last_figure
+    _last_figure = fig
 
     return fig
