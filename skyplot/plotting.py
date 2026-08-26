@@ -757,6 +757,7 @@ def platecarree(
     map_data: np.ndarray,
     *,
     projection_kwargs: dict[str, Any] | None = None,
+    extent: Sequence[float] | None = None,
     wcs: Any | None = None,
     ax: Any | None = None,
     n_theta: int = 720,
@@ -783,6 +784,8 @@ def platecarree(
     ----------
     map_data : numpy.ndarray
         1D HEALPix map or 2D WCS-backed map.
+    extent: sequence[float] or None, optional
+        Geographic render window as ``(lon_min, lon_max, lat_min, lat_max)``.
     projection_kwargs : dict[str, Any] or None, optional
         Keyword arguments forwarded to ``cartopy.crs.PlateCarree``.
     wcs : Any or None, optional
@@ -799,12 +802,15 @@ def platecarree(
     matplotlib.figure.Figure
         The figure containing the rendered map.
     """
+    validated_extent = _validate_extent(extent)
+    
     ccrs = _get_cartopy_crs_module()
     return _plot_with_projection(
         map_data,
         projection_name="platecarree",
         projection_factory=ccrs.PlateCarree,
         projection_kwargs=projection_kwargs,
+        extent=validated_extent,
         wcs=wcs,
         ax=ax,
         n_theta=n_theta,
