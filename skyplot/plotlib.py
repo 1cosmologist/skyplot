@@ -128,7 +128,8 @@ def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]
     lon = ((lon + 180.0) % 360.0) - 180.0
     lat = 90.0 - np.degrees(theta)
 
-    # Astronomy-style orientation: longitude increases from right to left.
+    # Match healpy.mollview's default ``flip="astro"`` convention: increasing
+    # phi (east) moves from right to left on the displayed sky.
     lon = -lon
     lon = ((lon + 180.0) % 360.0) - 180.0
     lon_sort_idx = np.argsort(lon[0, :])
@@ -585,7 +586,7 @@ def _with_bad_color(cmap: str | Colormap, badcolor: Any) -> Colormap:
     """Copy a colormap and configure its missing-data color."""
     resolved = plt.get_cmap(cmap)
     copied = resolved.copy()
-    copied.set_bad(badcolor)
+    copied.set_bad((0.0, 0.0, 0.0, 0.0) if badcolor is None else badcolor)
     return copied
 
 
@@ -854,6 +855,12 @@ def plot_with_projection(
             float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
         )
 
+    if projection_name == "mollweide" and not ax.xaxis_inverted():
+        # Healpy's default astronomy convention has phi increase to the left.
+        # Flip the completed projected view instead of altering the map's
+        # longitude samples, which preserves Cartopy's central-longitude wrap.
+        ax.invert_xaxis()
+
     applied_gridline_kwargs: dict[str, Any] = {
         "color": "black",
         "linestyle": "-",
@@ -883,12 +890,23 @@ def plot_with_projection(
     if overlay_mask:
         mesh_kwargs["alpha"] = alpha
 
+    mesh_cmap = resolved_cmap
+    if projection_name == "mollweide" and not np.isclose(
+        float(projection_kwargs.get("central_longitude", 0.0)) % 360.0,
+        0.0,
+    ):
+        # Cartopy masks cells at the rotated wrap seam.  Its pcolormesh
+        # implementation requires that internal mask to be transparent;
+        # otherwise it draws a broad badcolor band across the projection.
+        mesh_cmap = resolved_cmap.copy()
+        mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
+
     quad = ax.pcolormesh(
         lon,
         lat,
         values,
         transform=ccrs.PlateCarree(),
-        cmap=resolved_cmap,
+        cmap=mesh_cmap,
         vmin=vmin,
         vmax=vmax,
         norm=norm,
@@ -908,7 +926,9 @@ def plot_with_projection(
         cbar.ax.tick_params(labelsize=0.85 * font_size)
 
     if title:
-        ax.set_title(title, fontsize=1.2 * font_size)
+        # Titles sit just above the plot, so keep them only modestly larger
+        # than the base resolution-scaled text.
+        ax.set_title(title, fontsize=1.1 * font_size)
     ax.tick_params(labelsize=0.85 * font_size)
 
     fig.tight_layout()
