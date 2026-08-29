@@ -25,19 +25,7 @@ py.install_sources(
   [
     '__init__.py',
     'fonts.py',
-    'plotting.py',
-    'sampling.py',
-    'saving.py',
-  ],
-  pure: true,
-  subdir: 'skyplot',
-)
-
-# Keep package data under python purelib for editable installs.
-py.install_sources(
-  [
-    '__init__.py',
-    'fonts.py',
+    'plotlib.py',
     'plotting.py',
     'sampling.py',
     'saving.py',

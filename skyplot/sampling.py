@@ -24,12 +24,17 @@
 """Sampling helpers for HEALPix sky maps."""
 
 from __future__ import annotations
+from numbers import Integral
 
 import numpy as np
 import healpy as hp
 
 
-def _as_1d_healpix_map(hp_map: np.ndarray) -> np.ndarray:
+def _as_1d_healpix_map(
+    hp_map: np.ndarray,
+    *,
+    badvalue: float | None = hp.UNSEEN,
+) -> np.ndarray:
     """Validate and normalize a HEALPix map into a 1D float array.
 
     Parameters
@@ -52,11 +57,22 @@ def _as_1d_healpix_map(hp_map: np.ndarray) -> np.ndarray:
     arr = np.asarray(hp_map)
     if arr.ndim != 1:
         raise ValueError("HEALPix map must be one-dimensional.")
+    if np.iscomplexobj(arr):
+        raise ValueError(
+            "SkyPlot expects real-valued maps. Select a real, imaginary, "
+            "magnitude, or phase component before plotting."
+        )
 
     if isinstance(hp_map, np.ma.MaskedArray):
         arr = hp_map.filled(np.nan)
 
     arr = arr.astype(float, copy=False)
+    bad_mask = ~np.isfinite(arr)
+    if badvalue is not None:
+        bad_mask |= arr == badvalue
+    if np.any(bad_mask):
+        arr = arr.copy()
+        arr[bad_mask] = np.nan
 
     try:
         hp.get_nside(arr)
@@ -74,6 +90,7 @@ def sample_at_angles(
     nest: bool = False,
     lonlat: bool = False,
     interpolate: bool = True,
+    badvalue: float | None = hp.UNSEEN,
 ) -> np.ndarray:
     """Sample a HEALPix map at supplied angular coordinates.
 
@@ -95,6 +112,9 @@ def sample_at_angles(
     interpolate : bool, optional
         Use bilinear interpolation when ``True``. Use nearest-pixel sampling
         when ``False``. Default is ``True``.
+    badvalue : float or None, optional
+        Input sentinel value treated as missing data. Defaults to
+        ``healpy.UNSEEN``. NaN values are always treated as missing.
 
     Returns
     -------
@@ -106,7 +126,7 @@ def sample_at_angles(
     ValueError
         If input map is invalid or angle arrays have incompatible shapes.
     """
-    hp_arr = _as_1d_healpix_map(hp_map)
+    hp_arr = _as_1d_healpix_map(hp_map, badvalue=badvalue)
 
     theta_arr = np.asarray(theta)
     phi_arr = np.asarray(phi)
@@ -139,6 +159,8 @@ def make_theta_phi_grid(
     *,
     theta_min: float = 1e-4,
     theta_max: float | None = None,
+    phi_min: float = 0.0,
+    phi_max: float = 2.0 * np.pi,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build a regular full-sky angular grid in radians.
 
@@ -153,6 +175,9 @@ def make_theta_phi_grid(
         pole singularities in some workflows.
     theta_max : float or None, optional
         Maximum colatitude in radians. If ``None``, uses ``pi - theta_min``.
+    phi_min, phi_max : float, optional
+        Inclusive and exclusive longitude bounds in radians, respectively.
+        They must lie within ``[0, 2*pi]`` with ``phi_min < phi_max``.
 
     Returns
     -------
@@ -162,16 +187,59 @@ def make_theta_phi_grid(
     Raises
     ------
     ValueError
-        If ``n_theta`` or ``n_phi`` is less than 2.
+        If grid sizes are not integers of at least 2, or angular bounds are
+        non-finite, outside their physical ranges, or not increasing.
     """
-    if n_theta < 2 or n_phi < 2:
-        raise ValueError("n_theta and n_phi must both be >= 2.")
+    def validate_grid_size(value: int, name: str) -> int:
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
+            raise ValueError(f"{name} must be an integer >= 2.")
+        if value < 2:
+            raise ValueError(f"{name} must be an integer >= 2.")
+        return int(value)
+
+    def validate_bounds(
+        lower: float,
+        upper: float,
+        *,
+        name: str,
+        physical_upper: float,
+    ) -> tuple[float, float]:
+        try:
+            lower = float(lower)
+            upper = float(upper)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} bounds must be finite numbers.") from exc
+        if not np.isfinite([lower, upper]).all():
+            raise ValueError(f"{name} bounds must be finite numbers.")
+        if lower < 0.0 or upper > physical_upper:
+            raise ValueError(
+                f"{name} bounds must be within [0, {physical_upper}]."
+            )
+        if lower >= upper:
+            raise ValueError(f"{name}_min must be less than {name}_max.")
+        return lower, upper
+
+    n_theta = validate_grid_size(n_theta, "n_theta")
+    n_phi = validate_grid_size(n_phi, "n_phi")
 
     if theta_max is None:
         theta_max = np.pi - theta_min
 
+    theta_min, theta_max = validate_bounds(
+        theta_min,
+        theta_max,
+        name="theta",
+        physical_upper=np.pi,
+    )
+    phi_min, phi_max = validate_bounds(
+        phi_min,
+        phi_max,
+        name="phi",
+        physical_upper=2.0 * np.pi,
+    )
+
     theta = np.linspace(theta_min, theta_max, n_theta)
-    phi = np.linspace(0.0, 2.0 * np.pi, n_phi, endpoint=False)
+    phi = np.linspace(phi_min, phi_max, n_phi, endpoint=False)
     return np.meshgrid(theta, phi, indexing="ij")
 
 
@@ -182,6 +250,7 @@ def sample_full_sky(
     n_phi: int = 480,
     nest: bool = False,
     interpolate: bool = True,
+    badvalue: float | None = hp.UNSEEN,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sample an input HEALPix map on a regular full-sky grid.
 
@@ -197,6 +266,9 @@ def sample_full_sky(
         Whether input map uses NEST ordering. Default is ``False``.
     interpolate : bool, optional
         Use interpolation when ``True``, nearest-pixel lookup otherwise.
+    badvalue : float or None, optional
+        Input sentinel value treated as missing data. Defaults to
+        ``healpy.UNSEEN``. NaN values are always treated as missing.
 
     Returns
     -------
@@ -217,6 +289,7 @@ def sample_full_sky(
         nest=nest,
         lonlat=False,
         interpolate=interpolate,
+        badvalue=badvalue,
     )
 
     lon = np.degrees(phi)

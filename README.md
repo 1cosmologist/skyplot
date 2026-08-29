@@ -37,9 +37,35 @@ fig = mollweide(
 )
 fig.show()
 
-save_figure(fig, "cmb_map.html")
+# Display a Galactic map on an ICRS longitude/latitude grid. The transform
+# states (source_frame, display_frame), while coordinate_frame is optional
+# figure metadata. These keywords are available on non-gnomonic projections.
+icrs_fig = mollweide(
+    hp_map,
+    coordinate_frame="galactic",
+    coordinate_transform=("galactic", "icrs"),
+)
+
+# WCS maps infer the longitude/latitude world-axis order from their WCS
+# metadata, including RA/Dec and Galactic/ecliptic longitude/latitude axes.
+# For a WCS with ambiguous metadata, provide the *zero-based WCS world-axis*
+# indices as (longitude_axis, latitude_axis). For example, native (Dec, RA)
+# world coordinates use (1, 0); these are not NumPy array-axis indices.
+wcs_fig = mollweide(
+    wcs_map,
+    wcs=wcs,
+    world_axis_mapping=(1, 0),
+)
+
+# healpy.UNSEEN and NaN samples are rendered as grey by default. Customize
+# the input sentinel and missing-data color when needed.
+masked_fig = mollweide(
+    hp_map,
+    badvalue=hp.UNSEEN,
+    badcolor="lightgrey",
+)
+
 save_figure(fig, "cmb_map.png", figsize=(12, 6), dpi=300)
-save_figure(fig, "cmb_map_data", output_format="json")
 
 # Preset map densities (n_theta, n_phi)
 # low: (480, 960), medium: (720, 1440), high: (1440, 2880)

@@ -48,6 +48,7 @@ classifiers = [
 dependencies = [
   "numpy>=1.24",
   "healpy>=1.16",
+  "astropy>=5.0",
   "matplotlib>=3.8",
   "cartopy>=0.23",
   "colormaps>=0.4"

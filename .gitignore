@@ -36,9 +36,11 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+./skyplot/__pycache__/
+*.pyc
 
 # Misc
 .cache/
 *.tmp
 
-
+REVIEW_ISSUES.md

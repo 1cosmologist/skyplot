@@ -5,6 +5,7 @@ import matplotlib
 import numpy as np
 import pytest
 
+from skyplot.plotlib import _gnomonic_inverse
 from skyplot.plotting import gnomonic
 
 matplotlib.use("Agg")
@@ -16,6 +17,7 @@ class _LinearDummyWCS:
     def __init__(self, nrows: int, ncols: int) -> None:
         self.nrows = nrows
         self.ncols = ncols
+        self.world_axis_physical_types = ("pos.eq.ra", "pos.eq.dec")
 
     def all_world2pix(self, world, origin):
         arr = np.asarray(world, dtype=float)
@@ -76,6 +78,39 @@ def test_gnomonic_accepts_ndmap_like_with_wcs_attribute() -> None:
     fig = gnomonic(ndmap_like, center=(0.0, 0.0), xsize=32, ysize=24)
 
     assert isinstance(fig, matplotlib.figure.Figure)
+
+
+def test_gnomonic_inverse_uses_true_tangent_plane_scale() -> None:
+    plane_x = np.array([[np.tan(np.radians(60.0))]])
+    lon, lat = _gnomonic_inverse(
+        lon0_deg=0.0,
+        lat0_deg=0.0,
+        x_plane=plane_x,
+        y_plane=np.zeros_like(plane_x),
+    )
+
+    assert lon[0, 0] == pytest.approx(60.0)
+    assert lat[0, 0] == pytest.approx(0.0)
+
+
+def test_gnomonic_overlay_orientation_is_idempotent() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = gnomonic(hp_map, xsize=8, ysize=8, add_colorbar=False)
+    ax = fig.axes[0]
+    assert ax.xaxis_inverted()
+
+    gnomonic(hp_map, ax=ax, xsize=8, ysize=8, add_colorbar=False)
+    assert ax.xaxis_inverted()
+
+    gnomonic(
+        hp_map,
+        ax=ax,
+        xsize=8,
+        ysize=8,
+        add_colorbar=False,
+        astro_orientation=False,
+    )
+    assert not ax.xaxis_inverted()
 
 
 @pytest.mark.parametrize(

@@ -23,9 +23,7 @@ Basic example
    )
 
    fig.show()
-   save_figure(fig, "simulated_sky.html")
    save_figure(fig, "simulated_sky.png", figsize=(12, 6), dpi=300)
-   save_figure(fig, "simulated_sky_data", output_format="json")
 
 Notes
 -----

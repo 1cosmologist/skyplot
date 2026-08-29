@@ -26,7 +26,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
 
 from matplotlib.figure import Figure
 
@@ -37,16 +36,16 @@ def save_figure(
     fig: Figure | None = None,
     output_path: str | Path | None = None,
     *,
-    output_format: Literal["png", "jpg", "jpeg", "svg", "pdf", "eps"] | None = None,
     width: int | None = None,
     height: int | None = None,
     figsize: tuple[float, float] = (12.0, 6.0),
     dpi: int = 300,
     scale: float = 1.0,
 ) -> Path:
-    """Save a Matplotlib figure to a static image format.
+    """Save a Matplotlib figure to a static image format selected by suffix.
 
     If ``fig`` is omitted, the most recently created skyplot figure is used.
+    A path without a suffix is saved as PNG with ``.png`` appended.
     """
     # Allow save_figure("path.png") by shifting a path passed as `fig`.
     if isinstance(fig, (str, Path)):
@@ -58,7 +57,7 @@ def save_figure(
         raise ValueError("output_path is required.")
 
     if fig is None:
-        from .plotting import _get_last_figure
+        from .plotlib import _get_last_figure
 
         fig = _get_last_figure()
         if fig is None:
@@ -73,14 +72,10 @@ def save_figure(
     if len(figsize) != 2 or figsize[0] <= 0.0 or figsize[1] <= 0.0:
         raise ValueError("figsize must be a two-element tuple of positive values.")
 
-    fmt = output_format.lower() if output_format is not None else None
-    if fmt is None:
-        suffix = out.suffix.lower().lstrip(".")
-        if not suffix:
-            raise ValueError("No output format provided. Use a file suffix or output_format.")
-        fmt = suffix
-    elif out.suffix == "":
-        out = out.with_suffix(f".{fmt}")
+    fmt = out.suffix.lower().lstrip(".")
+    if not fmt:
+        fmt = "png"
+        out = out.with_suffix(".png")
 
     out.parent.mkdir(parents=True, exist_ok=True)
 

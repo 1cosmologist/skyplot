@@ -26,6 +26,7 @@
 from .fonts import configure_default_sans_serif, register_package_fonts, setup_package_fonts
 from .plotting import (
     AVAILABLE_PROJECTIONS,
+    FONT_SIZE_PRESETS,
     RESOLUTION_PRESETS,
     add_gridlines,
     equidistantconic,
@@ -42,6 +43,7 @@ setup_package_fonts()
 
 __all__ = [
     "AVAILABLE_PROJECTIONS",
+    "FONT_SIZE_PRESETS",
     "RESOLUTION_PRESETS",
     "add_gridlines",
     "configure_default_sans_serif",
