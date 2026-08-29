@@ -28,7 +28,6 @@ from importlib import import_module
 from typing import Any, Callable, Literal, Sequence
 
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 import numpy as np
 import healpy as hp
 from matplotlib.colors import Colormap, ListedColormap, Normalize
@@ -589,78 +588,6 @@ def _gnomonic_inverse(
     lat_deg = np.degrees(lat)
     return lon_deg, lat_deg
 
-
-def plot_gridlines(
-    ax: Any,
-    *,
-    color: str = "black",
-    linestyle: str = "-",
-    linewidth: float = 0.2,
-    lon_gridline_spacing_deg: float = 30.,
-    lat_gridline_spacing_deg: float = 30.,
-    alpha: float = 1.0,
-) -> Any:
-    """Add and customize Cartopy gridlines on an existing GeoAxes.
-
-    Parameters
-    ----------
-    ax : Any
-        Existing Cartopy GeoAxes object.
-    color : str, optional
-        Gridline color.
-    linestyle : str, optional
-        Gridline linestyle.
-    linewidth : float, optional
-        Gridline line width.
-    lon_gridline_spacing_deg : float, optional
-        Longitude gridline separation in degrees.
-    lat_gridline_spacing_deg : float, optional
-        Latitude gridline separation in degrees.
-    alpha : float, optional
-        Gridline alpha value.
-
-    Returns
-    -------
-    Any
-        The Cartopy gridliner object returned by ``ax.gridlines``.
-
-    Raises
-    ------
-    ValueError
-        If ``linewidth`` or gridline spacings are non-positive.
-    """
-    if linewidth <= 0:
-        raise ValueError("linewidth must be positive.")
-    if lon_gridline_spacing_deg <= 0:
-        raise ValueError("lon_gridline_spacing_deg must be positive.")
-    if lat_gridline_spacing_deg <= 0:
-        raise ValueError("lat_gridline_spacing_deg must be positive.")
-
-    ccrs = _get_cartopy_crs_module()
-    lon_ticks = np.arange(
-        -180.0 + lon_gridline_spacing_deg,
-        180.0 + 1e-6,
-        lon_gridline_spacing_deg,
-    )
-    lat_ticks = np.arange(
-        -90.0 + lat_gridline_spacing_deg,
-        90.0 + 1e-6,
-        lat_gridline_spacing_deg,
-    )
-
-    gl = ax.gridlines(
-        crs=ccrs.PlateCarree(),
-        draw_labels=False,
-        linewidth=linewidth,
-        color=color,
-        linestyle=linestyle,
-        alpha=alpha,
-    )
-    gl.xlocator = mticker.FixedLocator(lon_ticks)
-    gl.ylocator = mticker.FixedLocator(lat_ticks)
-    return gl
-
-
 def plot_with_projection(
     map_data: np.ndarray,
     *,
@@ -687,6 +614,7 @@ def plot_with_projection(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    gridline_adder: Callable[..., Any] | None = None,
     overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float = 1.0,
@@ -754,6 +682,9 @@ def plot_with_projection(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
+    gridline_adder : callable or None, default=None
+        Function that adds Cartopy gridlines. Required when
+        ``show_gridlines=True`` for direct low-level use.
     overlay_mask : bool, default=False
         Treat ``map_data`` as a binary allowed-pixel mask. Invalid (zero or
         false) samples are drawn as a translucent overlay; valid samples are
@@ -897,7 +828,12 @@ def plot_with_projection(
         applied_gridline_kwargs.update(gridline_kwargs)
 
     if show_gridlines:
-        plot_gridlines(ax, **applied_gridline_kwargs)
+        if gridline_adder is None:
+            raise ValueError(
+                "gridline_adder is required when show_gridlines=True. "
+                "Use skyplot.plotting.add_gridlines."
+            )
+        gridline_adder(ax, **applied_gridline_kwargs)
 
     mesh_kwargs: dict[str, Any] = {
         "shading": "nearest",
