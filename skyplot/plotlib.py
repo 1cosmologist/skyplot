@@ -438,10 +438,12 @@ def _transform_display_coordinates(
 ) -> tuple[np.ndarray, np.ndarray, str | None, list[str] | None]:
     """Transform display-frame coordinates into the input map frame.
 
-    ``coordinate_transform`` is a ``(source_frame, display_frame)`` pair.
-    Display-frame coordinates are transformed back to the source frame before
-    sampling so each plotted value remains attached to its physical sky
-    position. ``coordinate_frame`` is descriptive metadata only.
+    ``coordinate_transform`` is a ``(source_frame, display_frame)`` Astropy
+    frame pair. Common frame names are ``"icrs"`` (equatorial),
+    ``"galactic"``, and ``"geocentrictrueecliptic"`` (ecliptic). Display-frame
+    coordinates are transformed back to the source frame before sampling so
+    each plotted value remains attached to its physical sky position.
+    ``coordinate_frame`` is descriptive metadata only.
     """
     if coordinate_transform is None:
         return lon, lat, _coordinate_frame_label(coordinate_frame), None
@@ -705,7 +707,11 @@ def plot_with_projection(
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
-        ``(source_frame, display_frame)`` sampling transform.
+        ``(source_frame, display_frame)`` Astropy sampling transform. Common
+        frame names are ``"icrs"`` (equatorial), ``"galactic"``, and
+        ``"geocentrictrueecliptic"`` (ecliptic). For example,
+        ``("galactic", "icrs")`` displays a Galactic map in equatorial
+        coordinates.
     wcs : object or None, default=None
         WCS used for a 2D input.
     world_axis_mapping : sequence[int] or None, default=None
@@ -855,7 +861,12 @@ def plot_with_projection(
             float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
         )
 
-    if projection_name == "mollweide" and not ax.xaxis_inverted():
+    if projection_name in {
+        "mollweide",
+        "orthographic",
+        "platecarree",
+        "equidistantconic",
+    } and not ax.xaxis_inverted():
         # Healpy's default astronomy convention has phi increase to the left.
         # Flip the completed projected view instead of altering the map's
         # longitude samples, which preserves Cartopy's central-longitude wrap.

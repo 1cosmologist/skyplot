@@ -146,7 +146,11 @@ def mollweide(
     coordinate_frame : str or None, default=None
         Metadata label for the source coordinate frame.
     coordinate_transform : sequence[str] or None, default=None
-        ``(source_frame, display_frame)`` used to sample transformed coordinates.
+        ``(source_frame, display_frame)`` Astropy sampling transform. Common
+        frame names are ``"icrs"`` (equatorial), ``"galactic"``, and
+        ``"geocentrictrueecliptic"`` (ecliptic); for example,
+        ``("galactic", "icrs")`` displays a Galactic map in equatorial
+        coordinates.
     wcs : object or None, default=None
         WCS for a 2D input; its ``all_world2pix`` method is required.
     world_axis_mapping : sequence[int] or None, default=None
@@ -255,7 +259,9 @@ def orthographic(
     coordinate_frame : str or None, default=None
         Metadata label for the source coordinate frame.
     coordinate_transform : sequence[str] or None, default=None
-        Source/display frame pair used before sampling.
+        ``(source_frame, display_frame)`` Astropy sampling transform. Common
+        frame names are ``"icrs"`` (equatorial), ``"galactic"``, and
+        ``"geocentrictrueecliptic"`` (ecliptic).
     wcs : object or None, default=None
         WCS for a 2D map input.
     world_axis_mapping : sequence[int] or None, default=None
@@ -366,7 +372,9 @@ def platecarree(
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
-        Source/display coordinate-frame pair used for sampling.
+        ``(source_frame, display_frame)`` Astropy sampling transform. Common
+        frame names are ``"icrs"`` (equatorial), ``"galactic"``, and
+        ``"geocentrictrueecliptic"`` (ecliptic).
     wcs : object or None, default=None
         WCS for 2D input.
     world_axis_mapping : sequence[int] or None, default=None
@@ -478,7 +486,9 @@ def equidistantconic(
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
-        Source/display frame pair used for sampling.
+        ``(source_frame, display_frame)`` Astropy sampling transform. Common
+        frame names are ``"icrs"`` (equatorial), ``"galactic"``, and
+        ``"geocentrictrueecliptic"`` (ecliptic).
     wcs : object or None, default=None
         WCS for 2D input.
     world_axis_mapping : sequence[int] or None, default=None
@@ -583,7 +593,7 @@ def gnomonic(
     add_colorbar: bool = True,
     alpha: float = 1.0,
     astro_orientation: bool = True,
-    figsize: tuple[float, float] = (5.5, 5.5),
+    figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
 ) -> Figure:

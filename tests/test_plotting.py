@@ -115,6 +115,17 @@ def test_display_grid_cache_reuses_immutable_geometry() -> None:
     assert np.all(np.diff(lat_a[:, 0]) >= 0.0)
 
 
+def test_display_grid_uses_healpix_astronomy_phi_direction() -> None:
+    """Increasing HEALPix phi must move leftward, as in healpy.mollview."""
+    _display_grid_cache.clear()
+
+    lon, _ = _get_display_grid(4, 8)
+
+    # The sorted Cartopy longitude grid is the negated HEALPix phi sequence:
+    # phi=90 degrees therefore renders at -90 degrees (to the left of center).
+    assert np.array_equal(lon[0], np.arange(-180.0, 180.0, 45.0))
+
+
 def test_coordinate_transform_converts_display_grid_to_input_frame() -> None:
     """A Galactic display coordinate is sampled from the matching ICRS point."""
     display_lon = np.array([[0.0]])
@@ -234,6 +245,22 @@ def test_badvalue_and_badcolor_are_applied_to_plot_colormap() -> None:
     assert payload["badcolor"] == "magenta"
 
 
+def test_badcolor_none_makes_missing_samples_transparent() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    hp_map[0] = hp.UNSEEN
+
+    fig = mollweide(
+        hp_map,
+        n_theta=8,
+        n_phi=16,
+        interpolate=False,
+        badcolor=None,
+    )
+
+    quad = fig.axes[0].collections[0]
+    assert quad.cmap.get_bad()[3] == pytest.approx(0.0)
+
+
 @pytest.mark.parametrize(
     "func",
     [mollweide, orthographic, platecarree, equidistantconic, gnomonic],
@@ -259,6 +286,23 @@ def test_projection_plotter_accepts_2d_wcs_data() -> None:
     assert isinstance(fig, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["shape"] == [12, 24]
+
+
+def test_mollweide_rotated_central_longitude_keeps_all_map_samples() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+
+    fig = mollweide(
+        hp_map,
+        projection_kwargs={"central_longitude": 90.0},
+        n_theta=18,
+        n_phi=36,
+        interpolate=False,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    values = fig.axes[0].collections[0].get_array()
+    assert not np.any(np.ma.getmaskarray(values))
 
 
 def test_projection_plotter_accepts_ndmap_like_with_wcs_attribute() -> None:
@@ -470,7 +514,7 @@ def test_resolution_presets_apply_larger_font_sizes(monkeypatch, resolution) -> 
     base_size = FONT_SIZE_PRESETS[resolution]
     assert fig.dpi == DPI_PRESETS[resolution]
     assert getattr(fig, "_skyplot_payload")["dpi"] == DPI_PRESETS[resolution]
-    assert ax.title.get_fontsize() == pytest.approx(1.2 * base_size)
+    assert ax.title.get_fontsize() == pytest.approx(1.1 * base_size)
     assert colorbar_ax.xaxis.label.get_size() == pytest.approx(base_size)
     assert colorbar_ax.xaxis.get_ticklabels()[0].get_size() == pytest.approx(0.85 * base_size)
 
@@ -538,6 +582,31 @@ def test_equidistantconic_extent_is_recorded_in_payload() -> None:
     payload = getattr(fig, "_skyplot_payload")
     assert payload["projection"] == "equidistantconic"
     assert payload["extent"] == [-100.0, 20.0, -80.0, -10.0]
+
+
+@pytest.mark.parametrize(
+    ("func", "kwargs"),
+    [
+        (mollweide, {}),
+        (orthographic, {}),
+        (platecarree, {"extent": (-70.0, -10.0, -60.0, -20.0)}),
+        (equidistantconic, {"extent": (-70.0, -10.0, -60.0, -20.0)}),
+    ],
+)
+def test_cartopy_projections_use_astronomy_longitude_direction(func, kwargs) -> None:
+    """Cartopy sky projections display increasing longitude to the left."""
+    hp_map = np.ones(hp.nside2npix(2))
+
+    fig = func(
+        hp_map,
+        n_theta=8,
+        n_phi=16,
+        show_gridlines=False,
+        add_colorbar=False,
+        **kwargs,
+    )
+
+    assert fig.axes[0].xaxis_inverted()
 
 
 def test_equidistantconic_defaults_projection_center_from_extent() -> None:

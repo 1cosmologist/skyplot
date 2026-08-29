@@ -28,8 +28,6 @@ builddir/
 out/
 coverage/
 
-notebooks/
-
 # Python
 __pycache__/
 *.py[cod]
@@ -39,10 +37,13 @@ venv/
 skyplot/__pycache__/
 *.pyc
 .ruff_cache/
+notebooks/
 
 # Misc
 .cache/
 *.tmp
+*.ipynb
 
+PROJECT_CONTEXT.md
 REVIEW_ISSUES.md
 plot_wcs.py
