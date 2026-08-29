@@ -24,6 +24,7 @@
 """Matplotlib + Cartopy visualization routines for HEALPix sky maps."""
 
 from __future__ import annotations
+from collections import OrderedDict
 from importlib import import_module
 from typing import Any, Callable, Literal, Sequence
 
@@ -81,10 +82,68 @@ DPI_PRESETS: dict[str, int] = {
 
 _last_figure: Figure | None = None
 
+# Cached display geometry is independent of map values and WCS metadata. Keep
+# only two grids: a high-resolution pair of float64 lon/lat arrays is about
+# 66 MiB, while retaining high and medium costs roughly 83 MiB.
+_DISPLAY_GRID_CACHE_MAXSIZE = 2
+_display_grid_cache: OrderedDict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = OrderedDict()
+
 
 def _get_last_figure() -> Figure | None:
     """Return the most recently created skyplot figure, if any."""
     return _last_figure
+
+
+def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return an immutable, astronomy-oriented display grid from a small LRU cache.
+
+    Parameters
+    ----------
+    n_theta : int
+        Required colatitude grid size.
+    n_phi : int
+        Required longitude grid size.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, numpy.ndarray]
+        Read-only ``(longitude_deg, latitude_deg)`` arrays in the exact order
+        used for Cartopy rendering.
+
+    Notes
+    -----
+    The cache stores display geometry only. WCS conversion and map sampling
+    always run for the current map, WCS object, coordinate transform, and
+    world-axis mapping, so cached coordinates cannot be reused as pixel
+    coordinates for an incompatible map.
+    """
+    key = (n_theta, n_phi)
+    cached = _display_grid_cache.get(key)
+    if cached is not None:
+        _display_grid_cache.move_to_end(key)
+        return cached
+
+    theta, phi = make_theta_phi_grid(n_theta=n_theta, n_phi=n_phi)
+    lon = np.degrees(phi)
+    lon = ((lon + 180.0) % 360.0) - 180.0
+    lat = 90.0 - np.degrees(theta)
+
+    # Astronomy-style orientation: longitude increases from right to left.
+    lon = -lon
+    lon = ((lon + 180.0) % 360.0) - 180.0
+    lon_sort_idx = np.argsort(lon[0, :])
+    lon = lon[:, lon_sort_idx]
+    lat = lat[:, lon_sort_idx]
+
+    lat_sort_idx = np.argsort(lat[:, 0])
+    lon = lon[lat_sort_idx, :]
+    lat = lat[lat_sort_idx, :]
+    lon.setflags(write=False)
+    lat.setflags(write=False)
+    _display_grid_cache[key] = (lon, lat)
+    if len(_display_grid_cache) > _DISPLAY_GRID_CACHE_MAXSIZE:
+        _display_grid_cache.popitem(last=False)
+    return lon, lat
 
 
 def _font_size_for_resolution(resolution: Literal["low", "medium", "high"] | None) -> float:
@@ -745,14 +804,10 @@ def plot_with_projection(
         (0.0, 0.0, 0.0, 0.0) if overlay_mask else badcolor,
     )
 
-    theta, phi = make_theta_phi_grid(n_theta=n_theta, n_phi=n_phi)
-    display_lon = np.degrees(phi)
-    display_lon = ((display_lon + 180.0) % 360.0) - 180.0
-    display_lat = 90.0 - np.degrees(theta)
-
-    lon, lat, source_frame_label, display_frame_label = _transform_display_coordinates(
-        display_lon,
-        display_lat,
+    lon, lat = _get_display_grid(n_theta=n_theta, n_phi=n_phi)
+    source_lon, source_lat, source_frame_label, display_frame_label = _transform_display_coordinates(
+        lon,
+        lat,
         coordinate_frame=coordinate_frame,
         coordinate_transform=coordinate_transform,
     )
@@ -760,8 +815,8 @@ def plot_with_projection(
     if data_arr.ndim == 1:
         values = sample_at_angles(
             data_arr,
-            lon,
-            lat,
+            source_lon,
+            source_lat,
             nest=nest,
             lonlat=True,
             interpolate=interpolate,
@@ -771,8 +826,8 @@ def plot_with_projection(
         values = _sample_wcs_map(
             data_arr,
             wcs=resolved_wcs,
-            lon=lon,
-            lat=lat,
+            lon=source_lon,
+            lat=source_lat,
             interpolate=interpolate,
             world_axis_mapping=world_axis_mapping,
             badvalue=badvalue,
@@ -780,25 +835,6 @@ def plot_with_projection(
 
     if overlay_mask:
         values = np.ma.masked_where(values != 0, values)
-
-    # Sampling happens in the map's frame, while the projected grid remains
-    # in the requested display frame.
-    lon = display_lon
-    lat = display_lat
-
-    # Astronomy-style orientation: phi increases from right to left.
-    lon = -lon
-    lon = ((lon + 180.0) % 360.0) - 180.0
-    sort_idx = np.argsort(lon[0, :])
-    lon = lon[:, sort_idx]
-    lat = lat[:, sort_idx]
-    values = values[:, sort_idx]
-
-    # Keep latitude monotonic south->north for stable projected pcolormesh.
-    lat_sort_idx = np.argsort(lat[:, 0])
-    lon = lon[lat_sort_idx, :]
-    lat = lat[lat_sort_idx, :]
-    values = values[lat_sort_idx, :]
 
     created_fig = ax is None
     if ax is None:
