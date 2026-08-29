@@ -18,7 +18,7 @@ applications that need custom projection factories or rendering integration.
 Most users should prefer :mod:`skyplot.plotting`.
 
 .. automodule:: skyplot.plotlib
-   :members: plot_gridlines, plot_with_projection, plot_mollweide, plot_orthographic, plot_platecarree, plot_equidistantconic, plot_gnomonic
+   :members: plot_gridlines, plot_with_projection
 
 
 Sampling
