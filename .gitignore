@@ -37,7 +37,7 @@ venv/
 skyplot/__pycache__/
 *.pyc
 .ruff_cache/
-notebooks/
+
 
 # Misc
 .cache/
