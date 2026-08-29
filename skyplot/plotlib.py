@@ -163,6 +163,24 @@ def _resolve_input_map_and_wcs(
     return data_arr, resolved_wcs
 
 
+def _validate_binary_mask(mask: np.ndarray) -> None:
+    """Raise when a mask contains values other than boolean/zero/one.
+
+    Parameters
+    ----------
+    mask : numpy.ndarray
+        Required mask array. Boolean arrays are accepted directly; numeric
+        arrays must be finite and contain only ``0`` or ``1``.
+    """
+    values = np.asarray(mask)
+    if values.dtype == np.bool_:
+        return
+    if not np.issubdtype(values.dtype, np.number) or not np.isfinite(values).all():
+        raise ValueError("overlay_mask requires a finite binary mask containing only 0/1 or False/True.")
+    if not np.all((values == 0) | (values == 1)):
+        raise ValueError("overlay_mask requires a binary mask containing only 0/1 or False/True.")
+
+
 def _resolve_wcs_world_axis_mapping(
     wcs: Any,
     world_axis_mapping: Sequence[int] | None,
@@ -669,6 +687,9 @@ def plot_with_projection(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -733,6 +754,14 @@ def plot_with_projection(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
+    overlay_mask : bool, default=False
+        Treat ``map_data`` as a binary allowed-pixel mask. Invalid (zero or
+        false) samples are drawn as a translucent overlay; valid samples are
+        masked and transparent.
+    overlay_color : color, default="k"
+        Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
+    alpha : float, default=1.0
+        Opacity of the plotted layer. Mask overlays use ``0.25``.
     gridline_kwargs : dict or None, default=None
         Gridline option overrides.
     pcolormesh_kwargs : dict or None, default=None
@@ -770,8 +799,18 @@ def plot_with_projection(
     validated_extent = _validate_extent(extent)
     projection_kwargs = {} if projection_kwargs is None else dict(projection_kwargs)
     data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
+    if overlay_mask:
+        _validate_binary_mask(data_arr)
+        interpolate = False
+        show_gridlines = False
+        add_colorbar = False
+        alpha = 0.25
+        cmap = ListedColormap([overlay_color])
     ccrs = _get_cartopy_crs_module()
-    resolved_cmap = _with_bad_color(_resolve_cmap(cmap), badcolor)
+    resolved_cmap = _with_bad_color(
+        _resolve_cmap(cmap),
+        (0.0, 0.0, 0.0, 0.0) if overlay_mask else badcolor,
+    )
 
     theta, phi = make_theta_phi_grid(n_theta=n_theta, n_phi=n_phi)
     display_lon = np.degrees(phi)
@@ -805,6 +844,9 @@ def plot_with_projection(
             world_axis_mapping=world_axis_mapping,
             badvalue=badvalue,
         )
+
+    if overlay_mask:
+        values = np.ma.masked_where(values != 0, values)
 
     # Sampling happens in the map's frame, while the projected grid remains
     # in the requested display frame.
@@ -860,9 +902,12 @@ def plot_with_projection(
     mesh_kwargs: dict[str, Any] = {
         "shading": "nearest",
         "rasterized": True,
+        "alpha": alpha,
     }
     if pcolormesh_kwargs is not None:
         mesh_kwargs.update(pcolormesh_kwargs)
+    if overlay_mask:
+        mesh_kwargs["alpha"] = alpha
 
     quad = ax.pcolormesh(
         lon,
@@ -912,6 +957,8 @@ def plot_with_projection(
         "colorbar_title": colorbar_title,
         "title": title,
         "show_gridlines": show_gridlines,
+        "overlay_mask": overlay_mask,
+        "alpha": alpha,
         "gridline_color": applied_gridline_kwargs["color"],
         "gridline_linestyle": applied_gridline_kwargs["linestyle"],
         "gridline_linewidth": applied_gridline_kwargs["linewidth"],
@@ -956,6 +1003,9 @@ def plot_mollweide(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -1059,6 +1109,9 @@ def plot_mollweide(
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
+        overlay_mask=overlay_mask,
+        overlay_color=overlay_color,
+        alpha=alpha,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar,
@@ -1090,6 +1143,9 @@ def plot_orthographic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -1144,6 +1200,9 @@ def plot_orthographic(
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
+        overlay_mask=overlay_mask,
+        overlay_color=overlay_color,
+        alpha=alpha,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar,
@@ -1176,6 +1235,9 @@ def plot_platecarree(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -1236,6 +1298,9 @@ def plot_platecarree(
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
+        overlay_mask=overlay_mask,
+        overlay_color=overlay_color,
+        alpha=alpha,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar,
@@ -1268,6 +1333,9 @@ def plot_equidistantconic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -1344,6 +1412,9 @@ def plot_equidistantconic(
         colorbar_title=colorbar_title,
         title=title,
         show_gridlines=show_gridlines,
+        overlay_mask=overlay_mask,
+        overlay_color=overlay_color,
+        alpha=alpha,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar,
@@ -1375,6 +1446,7 @@ def plot_gnomonic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     add_colorbar: bool = True,
+    alpha: float = 1.0,
     astro_orientation: bool = True,
     figsize: tuple[float, float] = (5.5, 5.5),
     dpi: int = 300,
@@ -1493,6 +1565,7 @@ def plot_gnomonic(
     draw_kwargs: dict[str, Any] = {
         "origin": "lower",
         "interpolation": "nearest",
+        "alpha": alpha,
     }
     if imshow_kwargs is not None:
         draw_kwargs.update(imshow_kwargs)
@@ -1558,6 +1631,7 @@ def plot_gnomonic(
         "colorbar_title": colorbar_title,
         "title": title,
         "show_gridlines": False,
+        "alpha": alpha,
         "colorbar_orientation": "horizontal",
     }
 

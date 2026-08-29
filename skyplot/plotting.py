@@ -103,6 +103,9 @@ def mollweide(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -153,6 +156,12 @@ def mollweide(
         Axes title.
     show_gridlines : bool, default=True
         Draw Cartopy gridlines.
+    overlay_mask : bool, default=False
+        Render a binary allowed-pixel mask as an invalid-pixel overlay.
+    overlay_color : color, default="k"
+        Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
+    alpha : float, default=1.0
+        Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs : dict or None, default=None
         Overrides for gridline color, style, width, spacing, or opacity.
     pcolormesh_kwargs : dict or None, default=None
@@ -173,6 +182,7 @@ def mollweide(
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
+        overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
@@ -201,6 +211,9 @@ def orthographic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -251,6 +264,12 @@ def orthographic(
         Optional axes title.
     show_gridlines : bool, default=True
         Draw geographic gridlines.
+    overlay_mask : bool, default=False
+        Render a binary allowed-pixel mask as an invalid-pixel overlay.
+    overlay_color : color, default="k"
+        Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
+    alpha : float, default=1.0
+        Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh keyword arguments.
     add_colorbar : bool, default=True
@@ -269,6 +288,7 @@ def orthographic(
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
+        overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
@@ -298,6 +318,9 @@ def platecarree(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -350,6 +373,12 @@ def platecarree(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
+    overlay_mask : bool, default=False
+        Render a binary allowed-pixel mask as an invalid-pixel overlay.
+    overlay_color : color, default="k"
+        Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
+    alpha : float, default=1.0
+        Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh options.
     add_colorbar : bool, default=True
@@ -369,7 +398,9 @@ def platecarree(
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title, title=title,
-        show_gridlines=show_gridlines, gridline_kwargs=gridline_kwargs,
+        show_gridlines=show_gridlines, overlay_mask=overlay_mask,
+        overlay_color=overlay_color, alpha=alpha,
+        gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
         figsize=figsize, dpi=dpi,
     )
@@ -399,6 +430,9 @@ def equidistantconic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
+    alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -450,6 +484,12 @@ def equidistantconic(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
+    overlay_mask : bool, default=False
+        Render a binary allowed-pixel mask as an invalid-pixel overlay.
+    overlay_color : color, default="k"
+        Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
+    alpha : float, default=1.0
+        Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh options.
     add_colorbar : bool, default=True
@@ -483,7 +523,9 @@ def equidistantconic(
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title, title=title,
-        show_gridlines=show_gridlines, gridline_kwargs=gridline_kwargs,
+        show_gridlines=show_gridlines, overlay_mask=overlay_mask,
+        overlay_color=overlay_color, alpha=alpha,
+        gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
         figsize=figsize, dpi=dpi,
     )
@@ -512,6 +554,7 @@ def gnomonic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     add_colorbar: bool = True,
+    alpha: float = 1.0,
     astro_orientation: bool = True,
     figsize: tuple[float, float] = (5.5, 5.5),
     dpi: int = 300,
@@ -557,6 +600,8 @@ def gnomonic(
         Axes title.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
+    alpha : float, default=1.0
+        Image opacity.
     astro_orientation : bool, default=True
         Display increasing longitude to the left.
     figsize : tuple[float, float], default=(5.5, 5.5)
@@ -612,7 +657,11 @@ def gnomonic(
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     else:
         fig = ax.figure
-    draw_kwargs: dict[str, Any] = {"origin": "lower", "interpolation": "nearest"}
+    draw_kwargs: dict[str, Any] = {
+        "origin": "lower",
+        "interpolation": "nearest",
+        "alpha": alpha,
+    }
     if imshow_kwargs is not None:
         draw_kwargs.update(imshow_kwargs)
     half_pix = 0.5 * np.degrees(plane_pixel_size) * 60.0
@@ -641,6 +690,7 @@ def gnomonic(
         "vmin": vmin, "vmax": vmax, "norm": str(norm) if norm is not None else None,
         "cmap": str(cmap), "badvalue": badvalue, "badcolor": str(badcolor),
         "colorbar_title": colorbar_title, "title": title, "show_gridlines": False,
+        "alpha": alpha,
         "colorbar_orientation": "horizontal",
     }
     if created_fig:

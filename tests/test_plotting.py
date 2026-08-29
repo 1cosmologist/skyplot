@@ -293,6 +293,53 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
     assert len(fig.axes) == 2
 
 
+def test_overlay_mask_draws_only_invalid_pixels() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    allowed_mask = np.ones_like(hp_map, dtype=bool)
+    allowed_mask[:12] = False
+
+    fig = mollweide(
+        hp_map,
+        n_theta=8,
+        n_phi=16,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+    ax = fig.axes[0]
+    mollweide(
+        allowed_mask,
+        ax=ax,
+        n_theta=8,
+        n_phi=16,
+        overlay_mask=True,
+        overlay_color="magenta",
+        cmap="viridis",
+        show_gridlines=True,
+        add_colorbar=True,
+    )
+
+    overlay = ax.collections[-1]
+    values = overlay.get_array()
+    assert np.ma.isMaskedArray(values)
+    assert np.any(np.ma.getmaskarray(values))
+    assert overlay.get_alpha() == pytest.approx(0.25)
+    assert overlay.cmap(0.0) == pytest.approx(to_rgba("magenta"))
+    assert len(fig.axes) == 1
+
+
+def test_overlay_mask_requires_binary_input() -> None:
+    non_binary_mask = np.ones(hp.nside2npix(2))
+    non_binary_mask[0] = 2.0
+
+    with pytest.raises(ValueError, match="binary mask"):
+        mollweide(
+            non_binary_mask,
+            n_theta=8,
+            n_phi=16,
+            overlay_mask=True,
+        )
+
+
 def test_existing_axes_extent_overrides_extent_argument() -> None:
     hp_map = np.ones(hp.nside2npix(8))
     fig, ax = plt.subplots(subplot_kw={"projection": ccrs.PlateCarree()})
