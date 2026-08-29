@@ -91,8 +91,8 @@ def test_plotting_public_api_delegates_to_plotlib() -> None:
     assert plotting.mollweide.__module__ == "skyplot.plotting"
     assert plotting.add_gridlines.__module__ == "skyplot.plotting"
     assert callable(plotlib.plot_with_projection)
-    assert callable(plotlib.plot_mollweide)
-    assert callable(plotlib.plot_gnomonic)
+    assert not hasattr(plotlib, "plot_mollweide")
+    assert not hasattr(plotlib, "plot_gnomonic")
 
 
 def test_coordinate_transform_converts_display_grid_to_input_frame() -> None:
