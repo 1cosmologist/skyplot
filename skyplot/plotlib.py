@@ -688,7 +688,7 @@ def plot_with_projection(
     overlay_mask : bool, default=False
         Treat ``map_data`` as a binary allowed-pixel mask. Invalid (zero or
         false) samples are drawn as a translucent overlay; valid samples are
-        masked and transparent.
+        masked and transparent. ``vmin`` and ``vmax`` are ignored.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float, default=1.0
@@ -735,6 +735,8 @@ def plot_with_projection(
         interpolate = False
         show_gridlines = False
         add_colorbar = False
+        vmin = None
+        vmax = None
         alpha = 0.25
         cmap = ListedColormap([overlay_color])
     ccrs = _get_cartopy_crs_module()

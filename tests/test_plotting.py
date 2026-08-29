@@ -314,6 +314,8 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
         overlay_mask=True,
         overlay_color="magenta",
         cmap="viridis",
+        vmin=-5.0,
+        vmax=5.0,
         show_gridlines=True,
         add_colorbar=True,
     )
@@ -325,6 +327,9 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
     assert overlay.get_alpha() == pytest.approx(0.25)
     assert overlay.cmap(0.0) == pytest.approx(to_rgba("magenta"))
     assert len(fig.axes) == 1
+    payload = getattr(fig, "_skyplot_payload")
+    assert payload["vmin"] is None
+    assert payload["vmax"] is None
 
 
 def test_overlay_mask_requires_binary_input() -> None:
