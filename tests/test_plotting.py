@@ -17,6 +17,7 @@ import cartopy.crs as ccrs
 
 from skyplot.plotting import (
     AVAILABLE_PROJECTIONS,
+    DPI_PRESETS,
     FONT_SIZE_PRESETS,
     RESOLUTION_PRESETS,
     add_gridlines,
@@ -395,6 +396,8 @@ def test_resolution_presets_apply_larger_font_sizes(monkeypatch, resolution) -> 
 
     ax, colorbar_ax = fig.axes
     base_size = FONT_SIZE_PRESETS[resolution]
+    assert fig.dpi == DPI_PRESETS[resolution]
+    assert getattr(fig, "_skyplot_payload")["dpi"] == DPI_PRESETS[resolution]
     assert ax.title.get_fontsize() == pytest.approx(1.2 * base_size)
     assert colorbar_ax.xaxis.label.get_size() == pytest.approx(base_size)
     assert colorbar_ax.xaxis.get_ticklabels()[0].get_size() == pytest.approx(0.85 * base_size)

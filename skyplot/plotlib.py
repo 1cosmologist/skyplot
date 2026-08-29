@@ -74,6 +74,12 @@ FONT_SIZE_PRESETS: dict[str, float] = {
     "high": 18.0,
 }
 
+DPI_PRESETS: dict[str, int] = {
+    "low": 120,
+    "medium": 200,
+    "high": 300,
+}
+
 _last_figure: Figure | None = None
 
 
@@ -654,7 +660,7 @@ def plot_with_projection(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -666,7 +672,7 @@ def plot_with_projection(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Render a sampled sky map on a supplied Cartopy projection.
@@ -703,12 +709,13 @@ def plot_with_projection(
         Longitude sampling-grid size.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset overriding ``n_theta`` and ``n_phi``. It also uses a 14, 16,
-        or 18 point base font for low, medium, or high, respectively.
+        or 18 point base font and a 120, 200, or 300 DPI new figure for low,
+        medium, or high, respectively.
     nest : bool, default=False
         Use HEALPix NEST ordering.
     interpolate : bool, default=True
         Interpolate samples.
-    cmap : str or sequence, default="viridis"
+    cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
@@ -732,7 +739,7 @@ def plot_with_projection(
         Extra mesh keyword arguments.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
-    figsize : tuple[float, float], default=(12.0, 6.0)
+    figsize : tuple[float, float], default=(8.0, 5.0)
         New-figure size in inches.
     dpi : int, default=300
         New-figure resolution.
@@ -755,6 +762,8 @@ def plot_with_projection(
             supported = ", ".join(sorted(RESOLUTION_PRESETS))
             raise ValueError(f"Unsupported resolution '{resolution}'. Choose one of: {supported}")
         n_theta, n_phi = RESOLUTION_PRESETS[resolution]
+        if ax is None:
+            dpi = DPI_PRESETS[resolution]
 
     font_size = _font_size_for_resolution(resolution)
 
@@ -910,6 +919,7 @@ def plot_with_projection(
         "lat_gridline_spacing_deg": applied_gridline_kwargs["lat_gridline_spacing_deg"],
         "colorbar_orientation": "horizontal",
         "font_size": font_size,
+        "dpi": dpi,
     }
 
     # Prevent matplotlib's Jupyter inline backend from auto-displaying this
@@ -937,7 +947,7 @@ def plot_mollweide(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -949,7 +959,7 @@ def plot_mollweide(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy Mollweide projection.
@@ -1071,7 +1081,7 @@ def plot_orthographic(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -1083,7 +1093,7 @@ def plot_orthographic(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy Orthographic projection.
@@ -1157,7 +1167,7 @@ def plot_platecarree(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -1169,7 +1179,7 @@ def plot_platecarree(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy PlateCarree projection.
@@ -1249,7 +1259,7 @@ def plot_equidistantconic(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -1261,7 +1271,7 @@ def plot_equidistantconic(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy EquidistantConic projection.
@@ -1356,7 +1366,7 @@ def plot_gnomonic(
     ax: Any | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -1366,7 +1376,7 @@ def plot_gnomonic(
     title: str | None = None,
     add_colorbar: bool = True,
     astro_orientation: bool = True,
-    figsize: tuple[float, float] = (6.5, 6.5),
+    figsize: tuple[float, float] = (5.5, 5.5),
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
 ) -> Figure:

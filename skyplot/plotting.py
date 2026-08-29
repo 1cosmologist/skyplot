@@ -17,6 +17,7 @@ from . import plotlib as _plotlib
 from .plotlib import (
     AVAILABLE_PROJECTIONS,
     FONT_SIZE_PRESETS,
+    DPI_PRESETS,
     RESOLUTION_PRESETS,
     plot_with_projection,
     _gnomonic_inverse,
@@ -93,7 +94,7 @@ def mollweide(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -105,7 +106,7 @@ def mollweide(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy Mollweide projection.
@@ -130,12 +131,13 @@ def mollweide(
         Colatitude and longitude sampling-grid sizes.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset that overrides ``n_theta`` and ``n_phi`` and selects a larger
-        readable font size (14, 16, or 18 points for low, medium, or high).
+        readable font size (14, 16, or 18 points) and a 120, 200, or 300 DPI
+        new figure for low, medium, or high.
     nest : bool, default=False
         Treat a 1D HEALPix map as NEST ordered.
     interpolate : bool, default=True
         Interpolate sampled values instead of nearest-pixel lookup.
-    cmap : str or sequence, default="viridis"
+    cmap : str or sequence, default="roma_r"
         Matplotlib or ``colormaps`` colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Input sentinel converted to missing data; ``None`` disables sentinel matching.
@@ -157,7 +159,7 @@ def mollweide(
         Extra keyword arguments passed to ``GeoAxes.pcolormesh``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
-    figsize : tuple[float, float], default=(12.0, 6.0)
+    figsize : tuple[float, float], default=(8.0, 5.0)
         Figure size in inches when creating axes.
     dpi : int, default=300
         Figure resolution when creating axes.
@@ -190,7 +192,7 @@ def orthographic(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -202,7 +204,7 @@ def orthographic(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy Orthographic projection.
@@ -227,12 +229,13 @@ def orthographic(
         Colatitude and longitude sampling-grid sizes.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset overriding both sampling-grid sizes and selecting a 14, 16, or
-        18 point base font for low, medium, or high, respectively.
+        18 point base font and 120, 200, or 300 DPI new figure for low,
+        medium, or high, respectively.
     nest : bool, default=False
         Use HEALPix NEST ordering for a 1D map.
     interpolate : bool, default=True
         Interpolate sampled map values.
-    cmap : str or sequence, default="viridis"
+    cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables sentinel matching.
@@ -252,7 +255,7 @@ def orthographic(
         Extra gridline and mesh keyword arguments.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
-    figsize : tuple[float, float], default=(12.0, 6.0)
+    figsize : tuple[float, float], default=(5.5, 6.5)
         New-figure size in inches.
     dpi : int, default=300
         New-figure resolution.
@@ -286,7 +289,7 @@ def platecarree(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -298,7 +301,7 @@ def platecarree(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy PlateCarree projection.
@@ -326,12 +329,12 @@ def platecarree(
         Sampling-grid dimensions.
     resolution : {"low", "medium", "high"} or None, default=None
         Sampling-grid preset and 14, 16, or 18 point base font for low,
-        medium, or high, respectively.
+        medium, or high, respectively; also selects 120, 200, or 300 DPI.
     nest : bool, default=False
         Use HEALPix NEST ordering.
     interpolate : bool, default=True
         Interpolate samples.
-    cmap : str or sequence, default="viridis"
+    cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
@@ -351,7 +354,7 @@ def platecarree(
         Extra gridline and mesh options.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
-    figsize : tuple[float, float], default=(12.0, 6.0)
+    figsize : tuple[float, float], default=(8.0, 5.0)
         New-figure size.
     dpi : int, default=300
         New-figure resolution.
@@ -387,7 +390,7 @@ def equidistantconic(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -399,7 +402,7 @@ def equidistantconic(
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
 ) -> Figure:
     """Plot a sky map using a Cartopy EquidistantConic projection.
@@ -426,12 +429,12 @@ def equidistantconic(
         Sampling-grid dimensions.
     resolution : {"low", "medium", "high"} or None, default=None
         Sampling-grid preset and 14, 16, or 18 point base font for low,
-        medium, or high, respectively.
+        medium, or high, respectively; also selects 120, 200, or 300 DPI.
     nest : bool, default=False
         Use HEALPix NEST ordering.
     interpolate : bool, default=True
         Interpolate samples.
-    cmap : str or sequence, default="viridis"
+    cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
@@ -451,7 +454,7 @@ def equidistantconic(
         Extra gridline and mesh options.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
-    figsize : tuple[float, float], default=(12.0, 6.0)
+    figsize : tuple[float, float], default=(8.0, 5.0)
         New-figure size.
     dpi : int, default=300
         New-figure resolution.
@@ -500,7 +503,7 @@ def gnomonic(
     ax: Any | None = None,
     nest: bool = False,
     interpolate: bool = True,
-    cmap: str | Sequence[Any] = "viridis",
+    cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = "grey",
     vmin: float | None = None,
@@ -510,7 +513,7 @@ def gnomonic(
     title: str | None = None,
     add_colorbar: bool = True,
     astro_orientation: bool = True,
-    figsize: tuple[float, float] = (6.5, 6.5),
+    figsize: tuple[float, float] = (5.5, 5.5),
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
 ) -> Figure:
@@ -538,7 +541,7 @@ def gnomonic(
         Use HEALPix NEST ordering.
     interpolate : bool, default=True
         Interpolate sampled values.
-    cmap : str or sequence, default="viridis"
+    cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
@@ -556,7 +559,7 @@ def gnomonic(
         Add a horizontal colorbar.
     astro_orientation : bool, default=True
         Display increasing longitude to the left.
-    figsize : tuple[float, float], default=(6.5, 6.5)
+    figsize : tuple[float, float], default=(5.5, 5.5)
         New-figure size in inches.
     dpi : int, default=300
         New-figure resolution.
@@ -647,6 +650,7 @@ def gnomonic(
 
 __all__ = [
     "AVAILABLE_PROJECTIONS",
+    "DPI_PRESETS",
     "FONT_SIZE_PRESETS",
     "RESOLUTION_PRESETS",
     "add_gridlines",

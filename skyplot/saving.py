@@ -38,7 +38,7 @@ def save_figure(
     *,
     width: int | None = None,
     height: int | None = None,
-    figsize: tuple[float, float] = (12.0, 6.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
     scale: float = 1.0,
 ) -> Path:
