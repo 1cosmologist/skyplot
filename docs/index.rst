@@ -20,7 +20,6 @@ Features
 - Projection controls, including ``central_longitude`` and ``central_latitude``,
   are passed through ``projection_kwargs``.
 - Set ``figsize`` and ``dpi`` to control figure pixel dimensions.
-- HTML export embeds a PNG preview of the Matplotlib figure.
 - Fonts in ``skyplot/fonts/`` are bundled and set as the default sans-serif
   family on import.
 

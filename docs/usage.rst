@@ -230,7 +230,7 @@ Saving a figure
 ---------------
 
 Each plotting function returns a Matplotlib figure. Pass that figure to
-``save_figure`` to write an image or an HTML export with a PNG preview.
+``save_figure`` to write an image.
 
 .. code-block:: python
 
