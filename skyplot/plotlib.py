@@ -939,7 +939,7 @@ def plot_with_projection(
     if title:
         # Titles sit just above the plot, so keep them only modestly larger
         # than the base resolution-scaled text.
-        ax.set_title(title, fontsize=1.1 * font_size)
+        ax.set_title(title, fontsize=1.02 * font_size)
     ax.tick_params(labelsize=0.85 * font_size)
 
     fig.tight_layout()
