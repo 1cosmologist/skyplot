@@ -283,10 +283,9 @@ control their appearance.
            "method": "streamplot",
            "color": "white",
            "linewidth": 0.3,
-           "arrowstyle": "->",
+           "arrowstyle": "-",
            "arrowsize": 0.5,
-           "density": 3.5,
-           "alpha": 0.6,
+           "density": 3.,
        },
        resolution="medium",
    )
