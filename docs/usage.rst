@@ -307,26 +307,26 @@ with a streamplot result.
 .. code-block:: python
 
    vector_fig = mollweide(
-       P,
-       cmap="lipari",
-       norm=mpc.SymLogNorm(linthresh=0.01, linscale=1.0, vmin=0.0, vmax=1.0),
-       colorbar_title="Polarized intensity P",
-       resolution="medium",
-       title="HEALPix polarization orientation",
+      P,
+      cmap="lipari",
+      norm=mpc.SymLogNorm(linthresh=0.01, linscale=1., vmin=0., vmax=1.),
+      colorbar_title="Polarized intensity P",
+      resolution="medium",
+      title="HEALPix polarization orientation",
    )
    mollweide(
-       (east_component, north_component),
-       ax=vector_fig.axes[0],
-       plot_mode="vector_field",
-       vector_kwargs={
-           "method": "quiver",
-           "color": "white",
-           "width": 0.002,
-           "headwidth": 0.0,
-           "minshaft": 3.0,
-           "alpha": 0.6,
-       },
-       resolution="medium",
+      (east_component, north_component),
+      ax=vector_fig.axes[0],
+      plot_mode="vector_field",
+      vector_kwargs={
+         "method": "quiver",
+         "color": "white",
+         "width": 0.005,
+         "headwidth": 0.,
+         "minshaft": 3.0,
+         "alpha": 0.6,
+      },
+      resolution="medium",
    )
 
 .. figure:: figures/quiver.png
