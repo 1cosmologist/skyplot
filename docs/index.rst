@@ -20,6 +20,12 @@ Features
 - Projection controls, including ``central_longitude`` and ``central_latitude``,
   are passed through ``projection_kwargs``.
 - Set ``figsize`` and ``dpi`` to control figure pixel dimensions.
+- Binary mask and transparent vector overlays are available through
+  ``plot_mode="overlay_mask"`` and ``plot_mode="vector_field"``. Vector
+  overlays are drawn on axes from a prior scalar magnitude-map call.
+- Gnomonic views default to no graticules and display the center, patch size,
+  and pixel size as projection metadata; enable local graticules with
+  ``show_gridlines=True``.
 - Fonts in ``skyplot/fonts/`` are bundled and set as the default sans-serif
   family on import.
 

@@ -103,8 +103,54 @@ def add_gridlines(
     return gridliner
 
 
+def _gnomonic_grid_spacing(span_deg: float) -> float:
+    """Choose a readable angular grid interval for a local sky view."""
+    candidates = np.array([0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0])
+    target = max(span_deg / 4.0, candidates[0])
+    return float(candidates[np.argmin(np.abs(np.log(candidates / target)))])
+
+
+def _add_gnomonic_gridlines(
+    ax: Any,
+    *,
+    x_arcmin: np.ndarray,
+    y_arcmin: np.ndarray,
+    lon_deg: np.ndarray,
+    lat_deg: np.ndarray,
+    lon0_deg: float,
+    lat0_deg: float,
+    gridline_kwargs: dict[str, Any] | None,
+) -> None:
+    """Add curved longitude and latitude graticules to a gnomonic axes."""
+    lon_unwrapped = lon0_deg + ((lon_deg - lon0_deg + 180.0) % 360.0) - 180.0
+    lon_min, lon_max = float(np.nanmin(lon_unwrapped)), float(np.nanmax(lon_unwrapped))
+    lat_min, lat_max = float(np.nanmin(lat_deg)), float(np.nanmax(lat_deg))
+    lon_step = _gnomonic_grid_spacing(lon_max - lon_min)
+    lat_step = _gnomonic_grid_spacing(lat_max - lat_min)
+    lon_levels = np.arange(np.ceil(lon_min / lon_step) * lon_step, lon_max, lon_step)
+    lat_levels = np.arange(np.ceil(lat_min / lat_step) * lat_step, lat_max, lat_step)
+
+    style: dict[str, Any] = {
+        "colors": "black", "linestyles": "-", "linewidths": 0.2, "alpha": 1.0,
+    }
+    if gridline_kwargs is not None:
+        style.update(gridline_kwargs)
+    for singular, plural in (("color", "colors"), ("linestyle", "linestyles"), ("linewidth", "linewidths")):
+        if singular in style:
+            style[plural] = style.pop(singular)
+    # A gnomonic graticule is curved. Rectangular-axis ticks would represent
+    # coordinates only along the central row/column and are therefore wrong at
+    # the plot edges. Keep the coordinate contours unlabeled.
+    if lon_levels.size:
+        ax.contour(x_arcmin, y_arcmin, lon_unwrapped, levels=lon_levels, **style)
+    if lat_levels.size:
+        ax.contour(x_arcmin, y_arcmin, lat_deg, levels=lat_levels, **style)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+
 def mollweide(
-    map_data: np.ndarray,
+    map_data: Any,
     *,
     projection_kwargs: dict[str, Any] | None = None,
     coordinate_frame: str | None = None,
@@ -126,11 +172,13 @@ def mollweide(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
+    vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -139,8 +187,9 @@ def mollweide(
 
     Parameters
     ----------
-    map_data : numpy.ndarray
-        Required 1D HEALPix map or 2D WCS-backed image.
+    map_data : numpy.ndarray or sequence
+        Required 1D HEALPix map or 2D WCS-backed image. In vector mode, a
+        two-element ``(U, V)`` sequence of matching component maps.
     projection_kwargs : dict or None, default=None
         Keyword arguments passed to Cartopy's ``Mollweide`` CRS.
     coordinate_frame : str or None, default=None
@@ -183,8 +232,13 @@ def mollweide(
         Axes title.
     show_gridlines : bool, default=True
         Draw Cartopy gridlines.
+    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+        Render a scalar map, a binary-mask overlay, or a transparent vector
+        overlay. Vector mode requires a two-element ``(U, V)`` map sequence
+        and ``ax=`` from a previously rendered magnitude map.
     overlay_mask : bool, default=False
         Render a binary allowed-pixel mask as an invalid-pixel overlay.
+        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float, default=1.0
@@ -193,6 +247,10 @@ def mollweide(
         Overrides for gridline color, style, width, spacing, or opacity.
     pcolormesh_kwargs : dict or None, default=None
         Extra keyword arguments passed to ``GeoAxes.pcolormesh``.
+    vector_kwargs : dict or None, default=None
+        Options for the vector artist in vector mode. Set ``method`` to
+        ``"streamplot"`` (default) or ``"quiver"``. ``cmap``, ``vmin``,
+        ``vmax``, and ``norm`` are ignored in vector mode.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -210,14 +268,15 @@ def mollweide(
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
-        overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
+        plot_mode=plot_mode, overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
+        vector_kwargs=vector_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
 
 
 def orthographic(
-    map_data: np.ndarray,
+    map_data: Any,
     *,
     projection_kwargs: dict[str, Any] | None = None,
     coordinate_frame: str | None = None,
@@ -239,11 +298,13 @@ def orthographic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
+    vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
@@ -252,8 +313,9 @@ def orthographic(
 
     Parameters
     ----------
-    map_data : numpy.ndarray
-        Required 1D HEALPix map or 2D WCS-backed image.
+    map_data : numpy.ndarray or sequence
+        Required 1D HEALPix map or 2D WCS-backed image. In vector mode, a
+        two-element ``(U, V)`` sequence of matching component maps.
     projection_kwargs : dict or None, default=None
         Keyword arguments passed to Cartopy's ``Orthographic`` CRS.
     coordinate_frame : str or None, default=None
@@ -294,14 +356,23 @@ def orthographic(
         Optional axes title.
     show_gridlines : bool, default=True
         Draw geographic gridlines.
+    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+        Render a scalar map, a binary-mask overlay, or a transparent vector
+        overlay. Vector mode requires a two-element ``(U, V)`` map sequence
+        and ``ax=`` from a previously rendered magnitude map.
     overlay_mask : bool, default=False
         Render a binary allowed-pixel mask as an invalid-pixel overlay.
+        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float, default=1.0
         Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh keyword arguments.
+    vector_kwargs : dict or None, default=None
+        Options for the vector artist in vector mode. Set ``method`` to
+        ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
+        are ignored in vector mode.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(5.5, 6.5)
@@ -319,14 +390,15 @@ def orthographic(
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
-        overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
+        plot_mode=plot_mode, overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
+        vector_kwargs=vector_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
 
 
 def platecarree(
-    map_data: np.ndarray,
+    map_data: Any,
     *,
     projection_kwargs: dict[str, Any] | None = None,
     extent: Sequence[float] | None = None,
@@ -349,11 +421,13 @@ def platecarree(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
+    vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -362,8 +436,9 @@ def platecarree(
 
     Parameters
     ----------
-    map_data : numpy.ndarray
-        Required 1D HEALPix map or 2D WCS-backed image.
+    map_data : numpy.ndarray or sequence
+        Required 1D HEALPix map or 2D WCS-backed image. In vector mode, a
+        two-element ``(U, V)`` sequence of matching component maps.
     projection_kwargs : dict or None, default=None
         Keyword arguments for Cartopy's ``PlateCarree`` CRS.
     extent : sequence[float] or None, default=None
@@ -406,14 +481,23 @@ def platecarree(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
+    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+        Render a scalar map, a binary-mask overlay, or a transparent vector
+        overlay. Vector mode requires a two-element ``(U, V)`` map sequence
+        and ``ax=`` from a previously rendered magnitude map.
     overlay_mask : bool, default=False
         Render a binary allowed-pixel mask as an invalid-pixel overlay.
+        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float, default=1.0
         Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh options.
+    vector_kwargs : dict or None, default=None
+        Options for the vector artist in vector mode. Set ``method`` to
+        ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
+        are ignored in vector mode.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -432,16 +516,17 @@ def platecarree(
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
-        overlay_mask=overlay_mask,
+        plot_mode=plot_mode, overlay_mask=overlay_mask,
         overlay_color=overlay_color, alpha=alpha,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
+        vector_kwargs=vector_kwargs,
         figsize=figsize, dpi=dpi,
     )
 
 
 def equidistantconic(
-    map_data: np.ndarray,
+    map_data: Any,
     *,
     projection_kwargs: dict[str, Any] | None = None,
     extent: Sequence[float] | None = None,
@@ -464,11 +549,13 @@ def equidistantconic(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
+    vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -477,8 +564,9 @@ def equidistantconic(
 
     Parameters
     ----------
-    map_data : numpy.ndarray
-        Required 1D HEALPix map or 2D WCS-backed image.
+    map_data : numpy.ndarray or sequence
+        Required 1D HEALPix map or 2D WCS-backed image. In vector mode, a
+        two-element ``(U, V)`` sequence of matching component maps.
     projection_kwargs : dict or None, default=None
         Cartopy ``EquidistantConic`` options; ``cutoff`` is unsupported.
     extent : sequence[float] or None, default=None
@@ -520,14 +608,23 @@ def equidistantconic(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
+    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+        Render a scalar map, a binary-mask overlay, or a transparent vector
+        overlay. Vector mode requires a two-element ``(U, V)`` map sequence
+        and ``ax=`` from a previously rendered magnitude map.
     overlay_mask : bool, default=False
         Render a binary allowed-pixel mask as an invalid-pixel overlay.
+        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float, default=1.0
         Layer opacity; mask overlays use ``0.25``.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh options.
+    vector_kwargs : dict or None, default=None
+        Options for the vector artist in vector mode. Set ``method`` to
+        ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
+        are ignored in vector mode.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -560,16 +657,17 @@ def equidistantconic(
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
-        overlay_mask=overlay_mask,
+        plot_mode=plot_mode, overlay_mask=overlay_mask,
         overlay_color=overlay_color, alpha=alpha,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
+        vector_kwargs=vector_kwargs,
         figsize=figsize, dpi=dpi,
     )
 
 
 def gnomonic(
-    map_data: np.ndarray,
+    map_data: Any,
     *,
     center: Sequence[float] = (0.0, 0.0),
     xsize: int = 500,
@@ -590,19 +688,26 @@ def gnomonic(
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
     title: str | None = None,
+    show_gridlines: bool = False,
+    gridline_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
+    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    overlay_mask: bool = False,
+    overlay_color: Any = "k",
     alpha: float = 1.0,
     astro_orientation: bool = True,
     figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
+    vector_kwargs: dict[str, Any] | None = None,
 ) -> Figure:
     """Plot a local gnomonic view using Matplotlib.
 
     Parameters
     ----------
-    map_data : numpy.ndarray
-        Required 1D HEALPix map or 2D WCS-backed image.
+    map_data : numpy.ndarray or sequence
+        Required 1D HEALPix map or 2D WCS-backed image. In vector mode, a
+        two-element ``(U, V)`` sequence of matching component maps.
     center : sequence[float], default=(0.0, 0.0)
         Tangent point as ``(longitude_deg, latitude_deg)``.
     xsize, ysize : int, defaults=500, 500
@@ -616,7 +721,8 @@ def gnomonic(
     world_axis_mapping : sequence[int] or None, default=None
         Explicit longitude/latitude WCS world-axis mapping.
     ax : matplotlib.axes.Axes or None, default=None
-        Existing axes for an overlay; ``None`` creates axes.
+        Existing axes for an overlay; ``None`` creates axes. Vector mode
+        requires axes from a prior magnitude-map rendering.
     nest : bool, default=False
         Use HEALPix NEST ordering.
     interpolate : bool, default=True
@@ -635,6 +741,22 @@ def gnomonic(
         Colorbar label.
     title : str or None, default=None
         Axes title.
+    show_gridlines : bool, default=False
+        Draw unlabeled curved longitude and latitude graticules in the tangent
+        plane. The axes otherwise display the center, patch size, and pixel
+        size rather than coordinate ticks.
+    gridline_kwargs : dict or None, default=None
+        Matplotlib contour-style overrides for gnomonic gridlines, such as
+        ``color``, ``linestyle``, ``linewidth``, or ``alpha``.
+    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+        Render a scalar map, a binary-mask overlay, or a transparent vector
+        overlay. Use a separate scalar-map call to render vector magnitude.
+    overlay_mask : bool, default=False
+        Legacy alias for ``plot_mode="overlay_mask"``.
+    vector_kwargs : dict or None, default=None
+        Options for the vector artist in vector mode. Set ``method`` to
+        ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
+        are ignored in vector mode.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     alpha : float, default=1.0
@@ -664,7 +786,27 @@ def gnomonic(
         raise ValueError("Gnomonic views must remain within 90 degrees of the tangent point.")
 
     lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
-    data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
+    plot_mode = _plotlib._resolve_plot_mode(plot_mode, overlay_mask)
+    overlay_mask = plot_mode == "overlay_mask"
+    vector_field = plot_mode == "vector_field"
+    if vector_field and ax is None:
+        raise ValueError(
+            "plot_mode='vector_field' requires ax= from a prior magnitude-map rendering."
+        )
+    if vector_field:
+        u_data, u_wcs, v_data, v_wcs = _plotlib._resolve_vector_maps(map_data, wcs)
+        cmap = "Greys"
+        vmin = vmax = norm = None
+        add_colorbar = False
+        show_gridlines = False
+    else:
+        data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
+        if overlay_mask:
+            _plotlib._validate_binary_mask(data_arr)
+            cmap = [overlay_color]
+            vmin = vmax = None
+            alpha = 0.25
+            add_colorbar = False
     resolved_cmap = _with_bad_color(_resolve_cmap(cmap), badcolor)
     x_pix = np.arange(xsize, dtype=float) - 0.5 * (xsize - 1)
     y_pix = np.arange(ysize, dtype=float) - 0.5 * (ysize - 1)
@@ -677,17 +819,26 @@ def gnomonic(
     lon_deg, lat_deg = _gnomonic_inverse(
         lon0_deg=lon0_deg, lat0_deg=lat0_deg, x_plane=x_plane_grid, y_plane=y_plane_grid
     )
-    if data_arr.ndim == 1:
-        values = sample_at_angles(
-            data_arr, lon_deg, lat_deg, nest=nest, lonlat=True,
-            interpolate=interpolate, badvalue=badvalue,
-        )
-    else:
-        values = _sample_wcs_map(
-            data_arr, wcs=resolved_wcs, lon=lon_deg, lat=lat_deg,
+    if vector_field:
+        u_values = _plotlib._sample_map_values(
+            u_data, wcs=u_wcs, lon=lon_deg, lat=lat_deg, nest=nest,
             interpolate=interpolate, world_axis_mapping=world_axis_mapping,
             badvalue=badvalue,
         )
+        v_values = _plotlib._sample_map_values(
+            v_data, wcs=v_wcs, lon=lon_deg, lat=lat_deg, nest=nest,
+            interpolate=interpolate, world_axis_mapping=world_axis_mapping,
+            badvalue=badvalue,
+        )
+        values = np.hypot(u_values, v_values)
+    else:
+        values = _plotlib._sample_map_values(
+            data_arr, wcs=resolved_wcs, lon=lon_deg, lat=lat_deg, nest=nest,
+            interpolate=interpolate, world_axis_mapping=world_axis_mapping,
+            badvalue=badvalue,
+        )
+    if overlay_mask:
+        values = np.ma.masked_where(values != 0, values)
 
     created_fig = ax is None
     if ax is None:
@@ -706,15 +857,45 @@ def gnomonic(
         float(x_plane_arcmin[0] - half_pix), float(x_plane_arcmin[-1] + half_pix),
         float(y_plane_arcmin[0] - half_pix), float(y_plane_arcmin[-1] + half_pix),
     ]
-    image = ax.imshow(
-        values, cmap=resolved_cmap, vmin=vmin, vmax=vmax, norm=norm,
-        extent=extent, **draw_kwargs,
-    )
+    image = None
+    if not vector_field:
+        image = ax.imshow(
+            values, cmap=resolved_cmap, vmin=vmin, vmax=vmax, norm=norm,
+            extent=extent, **draw_kwargs,
+        )
+    vector_method = None
+    if vector_field:
+        vector_method = _plotlib._draw_vector_field(
+            ax, lon=x_plane_grid * 180.0 / np.pi * 60.0,
+            lat=y_plane_grid * 180.0 / np.pi * 60.0, u=u_values, v=v_values,
+            vector_kwargs=vector_kwargs, n_theta=ysize, n_phi=xsize,
+            figsize=tuple(fig.get_size_inches()), resolution=None,
+        )
     if astro_orientation != ax.xaxis_inverted():
         ax.invert_xaxis()
-    ax.set_xlabel("Tangent-plane x [arcmin]")
-    ax.set_ylabel("Tangent-plane y [arcmin]")
+    if show_gridlines:
+        _add_gnomonic_gridlines(
+            ax,
+            x_arcmin=x_plane_grid * 180.0 / np.pi * 60.0,
+            y_arcmin=y_plane_grid * 180.0 / np.pi * 60.0,
+            lon_deg=lon_deg,
+            lat_deg=lat_deg,
+            lon0_deg=lon0_deg,
+            lat0_deg=lat0_deg,
+            gridline_kwargs=gridline_kwargs,
+        )
+    else:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    patch_width_deg = np.degrees(2.0 * np.arctan(0.5 * xsize * plane_pixel_size))
+    patch_height_deg = np.degrees(2.0 * np.arctan(0.5 * ysize * plane_pixel_size))
+    ax.set_xlabel(f"Center: ({lon0_deg:g}°, {lat0_deg:g}°)")
+    ax.set_ylabel(
+        f"Patch: {patch_width_deg:.3g}° × {patch_height_deg:.3g}°   "
+        f"(Pixel size: {pixel_size_arcmin:g}')"
+    )
     if add_colorbar:
+        assert image is not None
         colorbar = fig.colorbar(image, ax=ax, orientation="horizontal", pad=0.08, fraction=0.05, aspect=40)
         colorbar.set_label(colorbar_title)
     if title:
@@ -726,7 +907,9 @@ def gnomonic(
         "extent": [float(value) for value in extent], "shape": [int(values.shape[0]), int(values.shape[1])],
         "vmin": vmin, "vmax": vmax, "norm": str(norm) if norm is not None else None,
         "cmap": str(cmap), "badvalue": badvalue, "badcolor": str(badcolor),
-        "colorbar_title": colorbar_title, "title": title, "show_gridlines": False,
+        "colorbar_title": colorbar_title, "title": title, "show_gridlines": show_gridlines,
+        "plot_mode": plot_mode, "overlay_mask": overlay_mask,
+        "vector_method": vector_method,
         "alpha": alpha,
         "colorbar_orientation": "horizontal",
     }

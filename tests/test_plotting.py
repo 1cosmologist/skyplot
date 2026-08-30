@@ -409,6 +409,73 @@ def test_overlay_mask_requires_binary_input() -> None:
         )
 
 
+@pytest.mark.parametrize("method", ["streamplot", "quiver"])
+def test_vector_field_draws_a_transparent_overlay(method: str) -> None:
+    u_map = np.ones(hp.nside2npix(2))
+    v_map = np.zeros_like(u_map)
+    fig = mollweide(
+        np.hypot(u_map, v_map), n_theta=12, n_phi=24,
+        show_gridlines=False, add_colorbar=False,
+    )
+    ax = fig.axes[0]
+    collection_count = len(ax.collections)
+
+    result = mollweide(
+        (u_map, v_map),
+        ax=ax,
+        plot_mode="vector_field",
+        vector_kwargs={"method": method, "color": "red", "cmap": "viridis"},
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        cmap="plasma",
+        vmin=2.0,
+        vmax=3.0,
+    )
+
+    payload = getattr(fig, "_skyplot_payload")
+    assert result is fig
+    assert payload["plot_mode"] == "vector_field"
+    assert payload["vector_method"] == method
+    assert payload["vmin"] is None
+    assert payload["vmax"] is None
+    assert len(fig.axes) == 1
+    assert len(ax.collections) > collection_count
+
+
+def test_vector_field_requires_matching_component_maps() -> None:
+    u_map = np.ones(hp.nside2npix(2))
+    v_map = np.ones(hp.nside2npix(4))
+    fig = mollweide(u_map, n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False)
+
+    with pytest.raises(ValueError, match="matching shapes"):
+        mollweide(
+            (u_map, v_map), ax=fig.axes[0], plot_mode="vector_field",
+            n_theta=8, n_phi=16,
+        )
+
+
+def test_vector_field_requires_existing_magnitude_axes() -> None:
+    component = np.ones(hp.nside2npix(2))
+
+    with pytest.raises(ValueError, match="requires ax="):
+        mollweide((component, component), plot_mode="vector_field", n_theta=8, n_phi=16)
+
+
+def test_plot_mode_overlay_mask_is_equivalent_to_legacy_switch() -> None:
+    mask = np.ones(hp.nside2npix(2), dtype=bool)
+    mask[:4] = False
+
+    fig = mollweide(
+        mask,
+        plot_mode="overlay_mask",
+        n_theta=8,
+        n_phi=16,
+    )
+
+    assert getattr(fig, "_skyplot_payload")["overlay_mask"] is True
+
+
 def test_existing_axes_extent_overrides_extent_argument() -> None:
     hp_map = np.ones(hp.nside2npix(8))
     fig, ax = plt.subplots(subplot_kw={"projection": ccrs.PlateCarree()})
@@ -453,6 +520,15 @@ def test_gnomonic_defaults_and_payload_shape() -> None:
     assert payload["projection"] == "gnomonic"
     assert payload["shape"] == [500, 500]
     assert payload["projection_kwargs"]["pixel_size_arcmin"] == pytest.approx(5.0)
+    assert payload["show_gridlines"] is False
+    ax = fig.axes[0]
+    assert ax.get_xlabel() == "Center: (0°, 0°)"
+    assert ax.get_ylabel() == "Patch: 40° × 40°   (Pixel size: 5')"
+    assert not ax.collections
+    assert len(ax.images) == 1
+    assert ax.get_xticks().size == 0
+    assert ax.get_yticks().size == 0
+    assert not ax.texts
 
 
 def test_gnomonic_accepts_2d_wcs_data() -> None:

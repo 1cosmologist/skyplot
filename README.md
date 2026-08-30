@@ -9,6 +9,8 @@ It samples maps with `healpy` at configurable angular coordinates and renders th
 - Input flexibility: 1D HEALPix arrays, 2D WCS arrays (`wcs=`), or ndmap-like objects with `.wcs`
 - Full-sky grid sampling with explicit `low`/`medium`/`high` resolution presets
 - Cartopy-powered `pcolormesh` rendering (true filled-cell map)
+- Transparent streamplot or quiver overlays for vector fields, layered onto a
+  separately rendered magnitude map
 - Supported projections include `mollweide`, `orthographic`, `platecarree`, `equidistantconic`
 - Uses geographic transforms (`PlateCarree`) so full-sky data is projected consistently
 - `cmap` accepts Matplotlib colormap names and names from the `colormaps` package

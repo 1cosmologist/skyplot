@@ -69,9 +69,9 @@ RESOLUTION_PRESETS: dict[str, tuple[int, int]] = {
 # Matplotlib's defaults so labels remain legible in the raster output for each
 # sampling preset.
 FONT_SIZE_PRESETS: dict[str, float] = {
-    "low": 14.0,
-    "medium": 16.0,
-    "high": 18.0,
+    "low": 12.0,
+    "medium": 14.0,
+    "high": 16.0,
 }
 
 DPI_PRESETS: dict[str, int] = {
@@ -650,8 +650,116 @@ def _gnomonic_inverse(
     lat_deg = np.degrees(lat)
     return lon_deg, lat_deg
 
+
+def _resolve_plot_mode(plot_mode: str, overlay_mask: bool) -> str:
+    """Normalize plot mode, retaining the legacy ``overlay_mask`` switch."""
+    if plot_mode not in {"map", "overlay_mask", "vector_field"}:
+        raise ValueError(
+            "plot_mode must be one of: 'map', 'overlay_mask', or 'vector_field'."
+        )
+    if overlay_mask and plot_mode not in {"map", "overlay_mask"}:
+        raise ValueError("overlay_mask cannot be combined with plot_mode='vector_field'.")
+    return "overlay_mask" if overlay_mask else plot_mode
+
+
+def _resolve_vector_maps(
+    map_data: Any, wcs: Any | None
+) -> tuple[np.ndarray, Any | None, np.ndarray, Any | None]:
+    """Resolve the two component maps used by a vector-field plot."""
+    if isinstance(map_data, np.ndarray) or isinstance(map_data, (str, bytes)):
+        raise ValueError("plot_mode='vector_field' requires a two-element (U, V) sequence.")
+    try:
+        u_map, v_map = map_data
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "plot_mode='vector_field' requires a two-element (U, V) sequence."
+        ) from exc
+    u_data, u_wcs = _resolve_input_map_and_wcs(u_map, wcs)
+    v_data, v_wcs = _resolve_input_map_and_wcs(v_map, wcs)
+    if u_data.shape != v_data.shape:
+        raise ValueError("The U and V maps in a vector field must have matching shapes.")
+    return u_data, u_wcs, v_data, v_wcs
+
+
+def _sample_map_values(
+    data: np.ndarray,
+    *,
+    wcs: Any | None,
+    lon: np.ndarray,
+    lat: np.ndarray,
+    nest: bool,
+    interpolate: bool,
+    world_axis_mapping: Sequence[int] | None,
+    badvalue: float | None,
+) -> np.ndarray:
+    """Sample either supported map representation on a longitude/latitude grid."""
+    if data.ndim == 1:
+        return sample_at_angles(
+            data, lon, lat, nest=nest, lonlat=True, interpolate=interpolate,
+            badvalue=badvalue,
+        )
+    return _sample_wcs_map(
+        data, wcs=wcs, lon=lon, lat=lat, interpolate=interpolate,
+        world_axis_mapping=world_axis_mapping, badvalue=badvalue,
+    )
+
+
+def _vector_defaults(
+    *, method: str, n_theta: int, n_phi: int, figsize: tuple[float, float],
+    resolution: Literal["low", "medium", "high"] | None,
+) -> dict[str, Any]:
+    """Choose legible vector density from the rendered map and figure size."""
+    resolution_scale = {"low": 0.8, "medium": 1.0, "high": 1.25}.get(
+        resolution or "medium", 1.0
+    )
+    if method == "streamplot":
+        return {"density": max(0.5, min(2.0, 0.16 * min(figsize) * resolution_scale)),
+                "color": "black", "linewidth": 0.7, "arrowsize": 0.8}
+    # Keep arrows sufficiently separated to remain useful on a printed figure.
+    target_columns = max(8, int(figsize[0] * 10.0 * resolution_scale))
+    target_rows = max(6, int(figsize[1] * 10.0 * resolution_scale))
+    return {"color": "black", "width": 0.0022, "scale_units": "xy",
+            "angles": "xy", "scale": None,
+            "_row_step": max(1, int(np.ceil(n_theta / target_rows))),
+            "_column_step": max(1, int(np.ceil(n_phi / target_columns)))}
+
+
+def _draw_vector_field(
+    ax: Any, *, lon: np.ndarray, lat: np.ndarray, u: np.ndarray, v: np.ndarray,
+    vector_kwargs: dict[str, Any] | None, n_theta: int, n_phi: int,
+    figsize: tuple[float, float], resolution: Literal["low", "medium", "high"] | None,
+    transform: Any | None = None,
+) -> str:
+    """Draw a streamplot or quiver layer and return the selected method."""
+    options = {} if vector_kwargs is None else dict(vector_kwargs)
+    method = str(options.pop("method", "streamplot")).lower()
+    if method not in {"streamplot", "quiver"}:
+        raise ValueError("vector_kwargs['method'] must be 'streamplot' or 'quiver'.")
+    # These are scalar-map options.  They have no meaning for either vector artist.
+    for key in ("vmin", "vmax", "norm", "cmap"):
+        options.pop(key, None)
+    defaults = _vector_defaults(
+        method=method, n_theta=n_theta, n_phi=n_phi, figsize=figsize,
+        resolution=resolution,
+    )
+    defaults.update(options)
+    call_transform = {} if transform is None else {"transform": transform}
+    u = np.ma.masked_invalid(u)
+    v = np.ma.masked_invalid(v)
+    if method == "streamplot":
+        ax.streamplot(lon, lat, u, v, **call_transform, **defaults)
+    else:
+        row_step = defaults.pop("_row_step")
+        column_step = defaults.pop("_column_step")
+        ax.quiver(
+            lon[::row_step, ::column_step], lat[::row_step, ::column_step],
+            u[::row_step, ::column_step], v[::row_step, ::column_step],
+            **call_transform, **defaults,
+        )
+    return method
+
 def plot_with_projection(
-    map_data: np.ndarray,
+    map_data: Any,
     *,
     projection_name: str,
     projection_factory: Callable[..., Any],
@@ -676,12 +784,14 @@ def plot_with_projection(
     colorbar_title: str = "Map value",
     title: str | None = None,
     show_gridlines: bool = True,
+    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     gridline_adder: Callable[..., Any] | None = None,
     overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float = 1.0,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
+    vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -694,8 +804,10 @@ def plot_with_projection(
 
     Parameters
     ----------
-    map_data : numpy.ndarray
-        Required 1D HEALPix map or 2D WCS-backed image.
+    map_data : numpy.ndarray or sequence
+        Required 1D HEALPix map or 2D WCS-backed image. For
+        ``plot_mode="vector_field"``, provide a two-element ``(U, V)``
+        sequence of matching component maps.
     projection_name : str
         Required metadata name for the projection.
     projection_factory : callable
@@ -717,7 +829,8 @@ def plot_with_projection(
     world_axis_mapping : sequence[int] or None, default=None
         Explicit longitude/latitude WCS world-axis mapping.
     ax : GeoAxes or None, default=None
-        Existing axes for an overlay; ``None`` creates axes.
+        Existing axes for an overlay; ``None`` creates axes. Vector mode
+        requires axes from a previously rendered magnitude map.
     n_theta : int, default=720
         Colatitude sampling-grid size.
     n_phi : int, default=1440
@@ -751,6 +864,12 @@ def plot_with_projection(
     gridline_adder : callable or None, default=None
         Function that adds Cartopy gridlines. Required when
         ``show_gridlines=True`` for direct low-level use.
+    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+        Rendering mode. ``"vector_field"`` accepts a ``(U, V)`` pair of
+        HEALPix maps or WCS-backed arrays and draws only a transparent vector
+        overlay. Draw its magnitude in a separate ``plot_mode="map"`` call
+        before passing that figure's axes here. Scalar color-scale arguments
+        are ignored.
     overlay_mask : bool, default=False
         Treat ``map_data`` as a binary allowed-pixel mask. Invalid (zero or
         false) samples are drawn as a translucent overlay; valid samples are
@@ -763,6 +882,9 @@ def plot_with_projection(
         Gridline option overrides.
     pcolormesh_kwargs : dict or None, default=None
         Extra mesh keyword arguments.
+    vector_kwargs : dict or None, default=None
+        Options passed to the vector artist when ``plot_mode="vector_field"``.
+        ``method`` selects ``"streamplot"`` (default) or ``"quiver"``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -793,9 +915,24 @@ def plot_with_projection(
 
     font_size = _font_size_for_resolution(resolution)
 
+    plot_mode = _resolve_plot_mode(plot_mode, overlay_mask)
+    overlay_mask = plot_mode == "overlay_mask"
+    vector_field = plot_mode == "vector_field"
+    if vector_field and ax is None:
+        raise ValueError(
+            "plot_mode='vector_field' requires ax= from a prior magnitude-map rendering."
+        )
     validated_extent = _validate_extent(extent)
     projection_kwargs = {} if projection_kwargs is None else dict(projection_kwargs)
-    data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
+    if vector_field:
+        u_data, u_wcs, v_data, v_wcs = _resolve_vector_maps(map_data, wcs)
+        # Vector properties belong in vector_kwargs; no scalar mesh is drawn.
+        cmap = "Greys"
+        vmin = vmax = norm = None
+        add_colorbar = False
+        show_gridlines = False
+    else:
+        data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
     if overlay_mask:
         _validate_binary_mask(data_arr)
         interpolate = False
@@ -819,25 +956,23 @@ def plot_with_projection(
         coordinate_transform=coordinate_transform,
     )
 
-    if data_arr.ndim == 1:
-        values = sample_at_angles(
-            data_arr,
-            source_lon,
-            source_lat,
-            nest=nest,
-            lonlat=True,
-            interpolate=interpolate,
+    if vector_field:
+        u_values = _sample_map_values(
+            u_data, wcs=u_wcs, lon=source_lon, lat=source_lat, nest=nest,
+            interpolate=interpolate, world_axis_mapping=world_axis_mapping,
             badvalue=badvalue,
         )
-    else:
-        values = _sample_wcs_map(
-            data_arr,
-            wcs=resolved_wcs,
-            lon=source_lon,
-            lat=source_lat,
-            interpolate=interpolate,
-            world_axis_mapping=world_axis_mapping,
+        v_values = _sample_map_values(
+            v_data, wcs=v_wcs, lon=source_lon, lat=source_lat, nest=nest,
+            interpolate=interpolate, world_axis_mapping=world_axis_mapping,
             badvalue=badvalue,
+        )
+        values = np.hypot(u_values, v_values)
+    else:
+        values = _sample_map_values(
+            data_arr, wcs=resolved_wcs, lon=source_lon, lat=source_lat,
+            nest=nest, interpolate=interpolate,
+            world_axis_mapping=world_axis_mapping, badvalue=badvalue,
         )
 
     if overlay_mask:
@@ -912,19 +1047,31 @@ def plot_with_projection(
         mesh_cmap = resolved_cmap.copy()
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
-    quad = ax.pcolormesh(
-        lon,
-        lat,
-        values,
-        transform=ccrs.PlateCarree(),
-        cmap=mesh_cmap,
-        vmin=vmin,
-        vmax=vmax,
-        norm=norm,
-        **mesh_kwargs,
-    )
+    quad = None
+    if not vector_field:
+        quad = ax.pcolormesh(
+            lon,
+            lat,
+            values,
+            transform=ccrs.PlateCarree(),
+            cmap=mesh_cmap,
+            vmin=vmin,
+            vmax=vmax,
+            norm=norm,
+            **mesh_kwargs,
+        )
+
+    vector_method = None
+    if vector_field:
+        vector_method = _draw_vector_field(
+            ax, lon=lon, lat=lat, u=u_values, v=v_values,
+            vector_kwargs=vector_kwargs, n_theta=n_theta, n_phi=n_phi,
+            figsize=tuple(fig.get_size_inches()), resolution=resolution,
+            transform=ccrs.PlateCarree(),
+        )
 
     if add_colorbar:
+        assert quad is not None
         cbar = fig.colorbar(
             quad,
             ax=ax,
@@ -944,7 +1091,7 @@ def plot_with_projection(
 
     fig.tight_layout()
 
-    # Used by save_figure for lightweight JSON export.
+
     fig._skyplot_payload = {  # type: ignore[attr-defined]
         "backend": "matplotlib-cartopy",
         "projection": projection_name,
@@ -962,7 +1109,9 @@ def plot_with_projection(
         "colorbar_title": colorbar_title,
         "title": title,
         "show_gridlines": show_gridlines,
+        "plot_mode": plot_mode,
         "overlay_mask": overlay_mask,
+        "vector_method": vector_method,
         "alpha": alpha,
         "gridline_color": applied_gridline_kwargs["color"],
         "gridline_linestyle": applied_gridline_kwargs["linestyle"],
