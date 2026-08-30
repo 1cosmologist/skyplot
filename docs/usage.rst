@@ -54,149 +54,24 @@ field, ``field=0``.
    print("npix:", hp_map.size, "nside:", hp.get_nside(hp_map))
    print("dtype:", hp_map.dtype)
 
-Mask overlay (optional)
------------------------
-
-The notebook also loads a Galactic-plane mask. It uses the mask only in the
-Mollweide example below, where zero-valued pixels are painted as a translucent
-overlay. Use ``plot_mode="overlay_mask"`` for this mode; scalar color options
-are ignored. Omit this cell and the second plotting call if no mask is needed.
-
-.. code-block:: python
-
-   mask_path = Path("path/to/your_mask.fits")
-   mask = hp.read_map(mask_path, field=1)
-
-Velocity-field overlays
------------------------
-
-Pass a ``(U, V)`` pair and select ``plot_mode="vector_field"`` to draw a
-transparent vector overlay on existing axes. Plot the magnitude separately in
-ordinary ``plot_mode="map"`` mode first, then pass ``ax=fig.axes[0]``. The
-default vector method is a streamline plot; choose ``method="quiver"`` for arrows. Scalar map color
-arguments (``cmap``, ``vmin``, ``vmax``, and ``norm``) are ignored in vector
-mode; vector appearance is controlled by ``vector_kwargs``.
-
-.. code-block:: python
-
-   magnitude = np.hypot(u_map, v_map)
-   fig = mollweide(magnitude, cmap="magma", colorbar_title="Magnitude")
-   mollweide(
-       (u_map, v_map),
-       ax=fig.axes[0],
-       plot_mode="vector_field",
-       vector_kwargs={"method": "quiver", "color": "white", "width": 0.002},
-   )
-
-The pair is ordered as ``(east_component, north_component)``. For HEALPix
-CMB Stokes maps, using the HEALPix tangent basis, construct a polarization
-director and its magnitude layer as follows:
-
-.. code-block:: python
-
-   P = np.hypot(Q_stokes, U_stokes)
-   psi = 0.5 * np.arctan2(U_stokes, Q_stokes)
-   east_component = np.sin(psi)
-   north_component = -np.cos(psi)
-
-Streamplot and quiver alternatives
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The package-test notebook uses the following preparation for a HEALPix Stokes
-map. The scalar polarized intensity is rendered first; the selected vector
-artist is then drawn transparently on that same axes.
-
-.. code-block:: python
-
-   hp_qu_map = hp.read_map("path/to/stokes_qu_map.fits", field=None)
-   Q_stokes, U_stokes = hp_qu_map[:2]
-   P = np.hypot(Q_stokes, U_stokes)
-   psi = 0.5 * np.arctan2(U_stokes, Q_stokes)
-   east_component = np.sin(psi)       # HEALPix e_phi
-   north_component = -np.cos(psi)     # negative HEALPix e_theta
-
-   vector_fig = mollweide(
-       P,
-       cmap="lipari",
-       norm=mpc.SymLogNorm(linthresh=0.01, linscale=1.0, vmin=0.0, vmax=1.0),
-       colorbar_title="Polarized intensity P",
-       resolution="medium",
-       title="HEALPix polarization orientation",
-   )
-
-Use ``method="streamplot"`` for continuous paths through the direction field.
-``density`` controls the number of paths, while ``linewidth``, ``arrowsize``,
-and ``arrowstyle`` control their appearance.
-
-.. code-block:: python
-
-   mollweide(
-       (east_component, north_component),
-       ax=vector_fig.axes[0],
-       plot_mode="vector_field",
-       vector_kwargs={
-           "method": "streamplot",
-           "color": "white",
-           "linewidth": 0.3,
-           "arrowstyle": "->",
-           "arrowsize": 0.5,
-           "density": 3.5,
-           "alpha": 0.6,
-       },
-       resolution="medium",
-   )
-
-.. figure:: figures/streamplot.png
-   :alt: Polarized intensity map with a white streamline overlay.
-   :width: 100%
-
-   Streamplot representation of the polarization direction field.
-
-Use ``method="quiver"`` for discrete vectors instead. This is useful when a
-controlled sampling of the field is preferable to continuous paths; ``width``
-controls arrow thickness.
-
-.. code-block:: python
-
-   vector_fig = mollweide(
-       P,
-       cmap="lipari",
-       norm=mpc.SymLogNorm(linthresh=0.01, linscale=1.0, vmin=0.0, vmax=1.0),
-       colorbar_title="Polarized intensity P",
-       resolution="medium",
-       title="HEALPix polarization orientation",
-   )
-   mollweide(
-       (east_component, north_component),
-       ax=vector_fig.axes[0],
-       plot_mode="vector_field",
-       vector_kwargs={
-           "method": "quiver",
-           "color": "white",
-           "width": 0.002,
-           "headwidth": 0.0,
-           "minshaft": 3.0,
-           "alpha": 0.6,
-       },
-       resolution="medium",
-   )
-
-.. figure:: figures/quiver.png
-   :alt: Polarized intensity map with a white quiver overlay.
-   :width: 100%
-
-   Quiver representation of the polarization direction field.
-
-For polarization orientation, which has no intrinsic arrow direction, use a
-headless streamline style such as
-``vector_kwargs={"method": "streamplot", "arrowstyle": "-"}``.
-
 Mollweide full-sky view
 -----------------------
 
 This full-sky view uses a symmetric-logarithmic scale to retain both faint and
 bright map structure. The second call layers the optional mask onto the axes
 created by the first call.
+
+Mask overlay (optional)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Load a Galactic-plane mask only if it is needed for this view. Zero-valued
+pixels are painted as a translucent overlay. Use ``plot_mode="overlay_mask"``;
+scalar color options are ignored in this mode.
+
+.. code-block:: python
+
+   mask_path = Path("path/to/your_mask.fits")
+   mask = hp.read_map(mask_path, field=1)
 
 .. code-block:: python
 
@@ -351,6 +226,118 @@ Optional curved, unlabeled longitude/latitude graticules can be enabled with
    :width: 75%
 
    The notebook's Gnomonic detail view centered at longitude 0 and latitude 90 degrees.
+
+Vector field visualization
+--------------------------
+
+``plot_mode="vector_field"`` adds a transparent streamplot or quiver artist
+to an existing map axes. Render the scalar magnitude in a separate ordinary
+map call first, then pass ``ax=fig.axes[0]`` for the overlay. Scalar map
+arguments (``cmap``, ``vmin``, ``vmax``, and ``norm``) are ignored by the
+overlay; configure the artist through ``vector_kwargs``.
+
+For CMB polarization, the first and second input maps are the **east** and
+**north** components of the director field, not the input Stokes ``U`` map.
+The following notebook-derived snippet follows the **HEALPix/COSMO**
+polarization convention:
+
+.. code-block:: python
+
+   hp_qu_map = hp.read_map("path/to/stokes_qu_map.fits", field=None)
+   Q_stokes, U_stokes = hp_qu_map[:2]
+   P = np.hypot(Q_stokes, U_stokes)
+   psi = 0.5 * np.arctan2(U_stokes, Q_stokes)
+   east_component = np.sin(psi)       # HEALPix e_phi
+   north_component = -np.cos(psi)     # negative HEALPix e_theta
+
+   vector_fig = mollweide(
+       P,
+       cmap="lipari",
+       norm=mpc.SymLogNorm(linthresh=0.01, linscale=1.0, vmin=0.0, vmax=1.0),
+       colorbar_title="Polarized intensity P",
+       resolution="medium",
+       title="HEALPix polarization orientation",
+   )
+
+.. warning::
+
+   Polarization conventions require care. The component conversion above is
+   for HEALPix/COSMO maps. IAU-convention products use the opposite Stokes
+   ``U`` sign, so convert their ``U`` map before calculating ``psi``. Always
+   confirm the convention recorded by the data product.
+
+Streamplot
+~~~~~~~~~~
+
+Use streamplot for continuous paths through the direction field. ``density``
+controls the number of paths; ``linewidth``, ``arrowsize``, and ``arrowstyle``
+control their appearance.
+
+.. code-block:: python
+
+   mollweide(
+       (east_component, north_component),
+       ax=vector_fig.axes[0],
+       plot_mode="vector_field",
+       vector_kwargs={
+           "method": "streamplot",
+           "color": "white",
+           "linewidth": 0.3,
+           "arrowstyle": "->",
+           "arrowsize": 0.5,
+           "density": 3.5,
+           "alpha": 0.6,
+       },
+       resolution="medium",
+   )
+
+.. figure:: figures/streamplot.png
+   :alt: Polarized intensity map with a white streamline overlay.
+   :width: 100%
+
+   Streamplot representation of the polarization direction field.
+
+Quiver
+~~~~~~
+
+Use quiver for discrete vectors when controlled sampling is preferable to
+continuous paths. Create a fresh magnitude figure when comparing it directly
+with a streamplot result.
+
+.. code-block:: python
+
+   vector_fig = mollweide(
+       P,
+       cmap="lipari",
+       norm=mpc.SymLogNorm(linthresh=0.01, linscale=1.0, vmin=0.0, vmax=1.0),
+       colorbar_title="Polarized intensity P",
+       resolution="medium",
+       title="HEALPix polarization orientation",
+   )
+   mollweide(
+       (east_component, north_component),
+       ax=vector_fig.axes[0],
+       plot_mode="vector_field",
+       vector_kwargs={
+           "method": "quiver",
+           "color": "white",
+           "width": 0.002,
+           "headwidth": 0.0,
+           "minshaft": 3.0,
+           "alpha": 0.6,
+       },
+       resolution="medium",
+   )
+
+.. figure:: figures/quiver.png
+   :alt: Polarized intensity map with a white quiver overlay.
+   :width: 100%
+
+   Quiver representation of the polarization direction field.
+
+Polarization orientation has no intrinsic arrow direction. For a headless
+streamline representation, use
+``vector_kwargs={"method": "streamplot", "arrowstyle": "-"}``.
 
 Saving a figure
 ---------------
