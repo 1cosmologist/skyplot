@@ -255,10 +255,9 @@ def _resolve_wcs_world_axis_mapping(
     world_n_dim = getattr(wcs, "world_n_dim", None)
     if world_n_dim is None:
         world_n_dim = getattr(wcsprm, "naxis", 2)
-    if world_n_dim != 2:
+    if world_n_dim < 2:
         raise ValueError(
-            "WCS-backed 2D maps must have exactly two world axes; reduce the "
-            "WCS to its plotted axes before passing it to skyplot."
+            "WCS-backed maps must provide at least two world axes."
         )
 
     if world_axis_mapping is not None:
@@ -326,6 +325,90 @@ def _resolve_wcs_world_axis_mapping(
     )
 
 
+def _resolve_wcs_pixel_axis_mapping(
+    wcs: Any, *, lon_axis: int, lat_axis: int
+) -> tuple[int, int]:
+    """Return the pixel ``(x, y)`` axes associated with WCS longitude/latitude."""
+    correlation = getattr(wcs, "axis_correlation_matrix", None)
+    if correlation is not None:
+        matrix = np.asarray(correlation, dtype=bool)
+        if matrix.ndim == 2 and lon_axis < matrix.shape[0] and lat_axis < matrix.shape[0]:
+            spatial_axes = np.flatnonzero(matrix[lon_axis] | matrix[lat_axis])
+            if spatial_axes.size == 2:
+                return int(spatial_axes[0]), int(spatial_axes[1])
+            raise ValueError(
+                "The longitude/latitude world axes depend on more than two pixel axes. "
+                "Slice the WCS to the supplied 2D data plane before plotting."
+            )
+    world_n_dim = getattr(wcs, "world_n_dim", None)
+    if world_n_dim is None:
+        world_n_dim = getattr(getattr(wcs, "wcs", None), "naxis", 2)
+    if world_n_dim > 2:
+        raise ValueError(
+            "Could not identify the two spatial pixel axes for this multi-axis WCS. "
+            "Use a WCS with axis_correlation_matrix or slice it to the 2D data plane."
+        )
+    # Astropy WCS stores the usual image x/y coordinates in its first two
+    # pixel axes. This fallback also supports lightweight WCS-like objects.
+    return 0, 1
+
+
+def _wcs_reference_world_values(wcs: Any, world_n_dim: int) -> np.ndarray:
+    """Return reference world coordinates for non-spatial WCS axes."""
+    wcsprm = getattr(wcs, "wcs", None)
+    crval = getattr(wcsprm, "crval", None)
+    if crval is None:
+        crval = getattr(wcs, "crval", None)
+    reference = np.zeros(world_n_dim, dtype=float)
+    if crval is not None:
+        candidate = np.asarray(crval, dtype=float).reshape(-1)
+        reference[: min(world_n_dim, candidate.size)] = candidate[:world_n_dim]
+    return reference
+
+
+def _car_longitude_pixel_period(
+    wcs: Any, *, lon_axis: int, pixel_x_axis: int
+) -> float | None:
+    """Return the 360-degree x-pixel period for a CAR longitude WCS."""
+    wcsprm = getattr(wcs, "wcs", None)
+    ctype = getattr(wcsprm, "ctype", None)
+    cdelt = getattr(wcsprm, "cdelt", None)
+    if ctype is None or cdelt is None or lon_axis >= len(ctype) or pixel_x_axis >= len(cdelt):
+        return None
+    if "-CAR" not in str(ctype[lon_axis]).upper():
+        return None
+    scale_deg = abs(float(cdelt[pixel_x_axis]))
+    if not np.isfinite(scale_deg) or scale_deg == 0.0:
+        return None
+    return 360.0 / scale_deg
+
+
+def _orient_wcs_slice_data(
+    data: np.ndarray, *, wcs: Any, pixel_x_axis: int, pixel_y_axis: int
+) -> np.ndarray:
+    """Orient a retained-WCS 2D slice as NumPy ``(y, x)`` image data."""
+    pixel_shape = getattr(wcs, "pixel_shape", None)
+    if pixel_shape is None:
+        return data
+    try:
+        x_size = int(pixel_shape[pixel_x_axis])
+        y_size = int(pixel_shape[pixel_y_axis])
+    except (IndexError, TypeError, ValueError):
+        return data
+    expected_shape = (y_size, x_size)
+    transposed_shape = (x_size, y_size)
+    if data.shape == expected_shape:
+        return data
+    if data.shape == transposed_shape and data.shape != expected_shape:
+        return data.T
+    raise ValueError(
+        "2D data shape is incompatible with the longitude/latitude pixel axes "
+        f"of the supplied WCS: received {data.shape}, expected {expected_shape} "
+        f"(NumPy y/x) or {transposed_shape} (transposed). Slice the WCS to the "
+        "same 2D data plane before plotting."
+    )
+
+
 def _sample_wcs_map(
     data: np.ndarray,
     *,
@@ -348,10 +431,21 @@ def _sample_wcs_map(
         data = data.copy()
         data[bad_mask] = np.nan
 
-    nrows, ncols = data.shape
     lon_axis, lat_axis = _resolve_wcs_world_axis_mapping(wcs, world_axis_mapping)
+    world_n_dim = getattr(wcs, "world_n_dim", None)
+    if world_n_dim is None:
+        world_n_dim = getattr(getattr(wcs, "wcs", None), "naxis", 2)
+    pixel_x_axis, pixel_y_axis = _resolve_wcs_pixel_axis_mapping(
+        wcs, lon_axis=lon_axis, lat_axis=lat_axis
+    )
+    data = _orient_wcs_slice_data(
+        data, wcs=wcs, pixel_x_axis=pixel_x_axis, pixel_y_axis=pixel_y_axis
+    )
+    nrows, ncols = data.shape
     n_samples = lon.size
-    world = np.empty((n_samples, 2), dtype=float)
+    world = np.broadcast_to(
+        _wcs_reference_world_values(wcs, int(world_n_dim)), (n_samples, int(world_n_dim))
+    ).copy()
     world[:, lon_axis] = lon.reshape(-1)
     world[:, lat_axis] = lat.reshape(-1)
 
@@ -364,18 +458,38 @@ def _sample_wcs_map(
     world_trials[2 * n_samples :, lon_axis] -= 360.0
     pix_raw = wcs.all_world2pix(world_trials, 0)
 
-    # Support both Nx2 array returns and tuple-of-arrays returns.
+    # Support both NxN array returns and tuple-of-arrays returns. A 2D image
+    # can retain a higher-dimensional WCS; select its spatial pixel axes.
     if isinstance(pix_raw, tuple):
-        if len(pix_raw) != 2:
-            raise ValueError("wcs.all_world2pix must return pixel x/y coordinates.")
-        x_trials = np.asarray(pix_raw[0], dtype=float).reshape(3, n_samples)
-        y_trials = np.asarray(pix_raw[1], dtype=float).reshape(3, n_samples)
+        if len(pix_raw) <= max(pixel_x_axis, pixel_y_axis):
+            raise ValueError("wcs.all_world2pix did not return the required spatial pixel axes.")
+        x_trials = np.asarray(pix_raw[pixel_x_axis], dtype=float).reshape(3, n_samples)
+        y_trials = np.asarray(pix_raw[pixel_y_axis], dtype=float).reshape(3, n_samples)
     else:
         pix = np.asarray(pix_raw, dtype=float)
-        if pix.ndim != 2 or pix.shape != (3 * n_samples, 2):
-            raise ValueError("wcs.all_world2pix must return an array with shape (N, 2).")
-        x_trials = pix[:, 0].reshape(3, n_samples)
-        y_trials = pix[:, 1].reshape(3, n_samples)
+        if (
+            pix.ndim != 2
+            or pix.shape[0] != 3 * n_samples
+            or pix.shape[1] <= max(pixel_x_axis, pixel_y_axis)
+        ):
+            raise ValueError(
+                "wcs.all_world2pix must return an array with the required spatial pixel axes."
+            )
+        x_trials = pix[:, pixel_x_axis].reshape(3, n_samples)
+        y_trials = pix[:, pixel_y_axis].reshape(3, n_samples)
+
+    longitude_period_pixels = _car_longitude_pixel_period(
+        wcs, lon_axis=lon_axis, pixel_x_axis=pixel_x_axis
+    )
+    if longitude_period_pixels is not None:
+        # WCSLIB normalizes CAR longitudes around its preferred wrap meridian.
+        # A full-sky CAR image can therefore receive an equivalent negative x
+        # coordinate for a longitude that is physically inside its pixel span.
+        # Re-wrap x into the image's periodic 360-degree coordinate interval.
+        x_wrapped = x_trials + longitude_period_pixels * np.ceil(
+            (-0.5 - x_trials) / longitude_period_pixels
+        )
+        x_trials = np.where(x_wrapped <= ncols - 0.5, x_wrapped, x_trials)
 
     inside_trials = (
         np.isfinite(x_trials)
@@ -827,7 +941,11 @@ def plot_with_projection(
     wcs : object or None, default=None
         WCS used for a 2D input.
     world_axis_mapping : sequence[int] or None, default=None
-        Explicit longitude/latitude WCS world-axis mapping.
+        Explicit ``(longitude_axis, latitude_axis)`` WCS world-axis mapping.
+        This permits a 2D image to retain WCS metadata with additional world
+        axes when its shape matches the WCS spatial pixel axes. Non-spatial
+        axes are evaluated at their WCS reference values; slice coupled WCS
+        and data cubes to the intended plane before plotting.
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates axes. Vector mode
         requires axes from a previously rendered magnitude map.

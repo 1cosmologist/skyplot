@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from astropy.wcs import WCS
 from matplotlib.colors import to_rgba
 import skyplot.plotlib as plotlib
 import skyplot.plotting as plotting
@@ -81,6 +82,33 @@ class _PeriodicLongitudeWCS:
     def all_world2pix(self, world, origin):
         arr = np.asarray(world, dtype=float)
         return np.column_stack([arr[:, 0], arr[:, 1]])
+
+
+class _ThreeAxisDummyWCS:
+    """Three-world-axis WCS whose image data occupy pixel axes x/y."""
+
+    world_n_dim = 3
+    pixel_n_dim = 3
+    axis_correlation_matrix = np.array(
+        [
+            [False, False, True],   # spectral world axis -> pixel axis 2
+            [True, False, False],   # longitude -> x
+            [False, True, False],   # latitude -> y
+        ]
+    )
+
+    class wcs:
+        naxis = 3
+        crval = np.array([150.0, 0.0, 0.0])
+
+    def __init__(self) -> None:
+        self.last_world = None
+
+    def all_world2pix(self, world, origin):
+        self.last_world = np.asarray(world, dtype=float)
+        return np.column_stack(
+            [self.last_world[:, 1], self.last_world[:, 2], self.last_world[:, 0]]
+        )
 
 
 class _NdmapLike:
@@ -204,6 +232,92 @@ def test_wcs_sampling_wraps_longitude_and_clamps_edge_neighbors() -> None:
     # -1 degrees is sampled via its 359-degree WCS alias. The last image row
     # and column are valid and use clamped bilinear neighbors.
     assert np.array_equal(values, [[data[4, 359], data[4, 359]]])
+
+
+def test_wcs_sampling_accepts_explicit_lon_lat_mapping_for_multi_axis_wcs() -> None:
+    y, x = np.mgrid[:8, :10]
+    data = x + 10.0 * y
+    wcs = _ThreeAxisDummyWCS()
+
+    values = _sample_wcs_map(
+        data,
+        wcs=wcs,
+        lon=np.array([[3.25]]),
+        lat=np.array([[4.5]]),
+        interpolate=True,
+        world_axis_mapping=(1, 2),
+        badvalue=None,
+    )
+
+    assert values[0, 0] == pytest.approx(48.25)
+    assert np.all(wcs.last_world[:, 0] == pytest.approx(150.0))
+
+
+def test_projection_plotter_accepts_multi_axis_wcs_with_explicit_mapping() -> None:
+    y, x = np.mgrid[:8, :10]
+    data = x + 10.0 * y
+
+    fig = mollweide(
+        data,
+        wcs=_ThreeAxisDummyWCS(),
+        world_axis_mapping=(1, 2),
+        n_theta=8,
+        n_phi=16,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+    assert getattr(fig, "_skyplot_payload")["shape"] == [8, 16]
+
+
+def test_wcs_sampling_unwraps_full_sky_car_longitude_with_extra_axis() -> None:
+    wcs = WCS(naxis=3)
+    wcs.wcs.ctype = ["VOPT", "GLON-CAR", "GLAT-CAR"]
+    wcs.wcs.crval = [-47.13829, -60.0, 0.0]
+    wcs.wcs.crpix = [1.0, 1.0, 321.0]
+    wcs.wcs.cdelt = [0.65019, 0.25, 0.25]
+    wcs.pixel_shape = (146, 1441, 677)
+    y, x = np.mgrid[:677, :1441]
+    data = x + 2000.0 * y
+
+    values = _sample_wcs_map(
+        data,
+        wcs=wcs,
+        lon=np.array([[180.0, -120.0]]),
+        lat=np.array([[0.0, 0.0]]),
+        interpolate=False,
+        world_axis_mapping=(1, 2),
+        badvalue=None,
+    )
+
+    # WCSLIB reports these longitudes as negative x coordinates; both are
+    # nevertheless within the -60 to 300 degree CAR image footprint.
+    assert np.allclose(values, [[640960.0, 641200.0]])
+
+    # A retained cube WCS can accompany a 2D slice stored as (lon, lat).
+    # The sampler recognizes it and restores NumPy's required (lat, lon) view.
+    transposed_values = _sample_wcs_map(
+        data.T,
+        wcs=wcs,
+        lon=np.array([[180.0, -120.0]]),
+        lat=np.array([[0.0, 0.0]]),
+        interpolate=False,
+        world_axis_mapping=(1, 2),
+        badvalue=None,
+    )
+    assert np.allclose(transposed_values, values)
+
+    with pytest.raises(ValueError, match="Slice the WCS"):
+        _sample_wcs_map(
+            np.zeros((100, 100)),
+            wcs=wcs,
+            lon=np.array([[0.0]]),
+            lat=np.array([[0.0]]),
+            interpolate=False,
+            world_axis_mapping=(1, 2),
+            badvalue=None,
+        )
 
 
 @pytest.mark.parametrize(

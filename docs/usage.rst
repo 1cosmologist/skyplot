@@ -194,6 +194,75 @@ use Astropy frame strings such as ``"galactic"``, ``"icrs"``, and
 
    The notebook's Plate Carree rendering after transforming Galactic coordinates to ICRS.
 
+WCS-backed maps
+---------------
+
+SkyPlot also accepts a two-dimensional array with an Astropy WCS. The
+notebook example starts from a three-axis CO cube whose WCS has the following
+world-axis order:
+
+.. code-block:: text
+
+   0: VOPT       (velocity)
+   1: GLON-CAR   (Galactic longitude)
+   2: GLAT-CAR   (Galactic latitude)
+
+The corresponding FITS pixel lengths are ``(146, 1441, 677)``. FITS data are
+presented to NumPy in reverse axis order, so the cube has shape
+``(677, 1441, 146)``. Integrating its last (velocity) axis produces the
+two-dimensional map shape ``(677, 1441) = (GLAT, GLON)``.
+
+.. code-block:: python
+
+   from astropy.io import fits
+   from astropy.wcs import WCS
+
+   with fits.open("path/to/co_cube.fits") as hdulist:
+       hdu = hdulist[0]
+       wcs = WCS(hdu.header)
+       data = hdu.data
+
+   data = np.nan_to_num(data, nan=0.0)
+   vel_inted_data = np.trapezoid(data, dx=0.65019, axis=2)
+   assert vel_inted_data.shape == (677, 1441)  # (GLAT, GLON)
+
+Pass the zero-based WCS *world-axis* indices, rather than NumPy array-axis
+indices, through ``world_axis_mapping``. Here ``(1, 2)`` selects
+``(GLON-CAR, GLAT-CAR)``; the retained velocity world axis is evaluated at its
+reference value. If the non-spatial and sky axes are coupled, slice both the
+WCS and cube to the desired plane before plotting.
+
+.. code-block:: python
+
+   platecarree(
+       vel_inted_data,
+       extent=(-180.0, 180.0, -80.0, 80.0),
+       resolution="high",
+       cmap="amethyst",
+       wcs=wcs,
+       world_axis_mapping=(1, 2),
+       badcolor=None,
+       norm=mpc.SymLogNorm(linthresh=1.0, linscale=1.0, vmin=0.0, vmax=50.0),
+       gridline_kwargs={"linewidth": 0.2, "color": "w", "linestyle": ":"},
+       title="WCS map - PlateCarree regional render",
+       colorbar_title="Galactic CO (velocity integrated) in K km/s",
+   )
+
+The source WCS longitude pixels span ``-60°`` to ``300°`` and therefore have
+a native seam at ``-60°/300°``. SkyPlot samples those native coordinates onto
+the uniform displayed ``[-180°, 180°]`` longitude grid, including equivalent
+360-degree longitudes as needed. The output is consequently centered at
+``(0°, 0°)`` because of its ``extent``; ``central_longitude`` is not inferred
+from the WCS. This differs from the source-array midpoint: the middle GLON
+column is at ``120°``, while GLON ``0°`` is column 240. The array center and
+the displayed map center therefore should not be expected to coincide.
+
+.. figure:: figures/wcs.png
+   :alt: Velocity-integrated Galactic CO WCS map rendered in Plate Carree coordinates.
+   :width: 100%
+
+   WCS-backed Galactic CO map sampled onto the standard Plate Carree display grid.
+
 Gnomonic detail view
 --------------------
 

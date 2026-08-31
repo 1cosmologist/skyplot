@@ -53,6 +53,10 @@ icrs_fig = mollweide(
 # For a WCS with ambiguous metadata, provide the *zero-based WCS world-axis*
 # indices as (longitude_axis, latitude_axis). For example, native (Dec, RA)
 # world coordinates use (1, 0); these are not NumPy array-axis indices.
+# For a WCS that retains additional world axes, the same explicit mapping is
+# supported when the 2D data shape matches its spatial pixel axes (either
+# NumPy (latitude, longitude) or its transpose). Non-spatial axes are
+# evaluated at their WCS reference values; slice coupled WCS/data cubes first.
 wcs_fig = mollweide(
     wcs_map,
     wcs=wcs,
