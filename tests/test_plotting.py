@@ -491,6 +491,7 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
         n_phi=16,
         overlay_mask=True,
         overlay_color="magenta",
+        alpha=0.4,
         cmap="viridis",
         vmin=-5.0,
         vmax=5.0,
@@ -498,11 +499,14 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
         add_colorbar=True,
     )
 
-    overlay = ax.collections[-1]
+    # Mollweide mask overlays are rendered as one warped image.  Unlike a
+    # transparent QuadMesh, this avoids accumulated polygon-edge opacity at
+    # the projection seam.
+    overlay = ax.images[-1]
     values = overlay.get_array()
     assert np.ma.isMaskedArray(values)
     assert np.any(np.ma.getmaskarray(values))
-    assert overlay.get_alpha() == pytest.approx(0.25)
+    assert overlay.get_alpha() == pytest.approx(0.4)
     assert overlay.cmap(0.0) == pytest.approx(to_rgba("magenta"))
     assert len(fig.axes) == 1
     payload = getattr(fig, "_skyplot_payload")
@@ -555,6 +559,58 @@ def test_vector_field_draws_a_transparent_overlay(method: str) -> None:
     assert payload["vmax"] is None
     assert len(fig.axes) == 1
     assert len(ax.collections) > collection_count
+
+
+def test_streamplot_vector_alpha_is_applied_to_lines_and_arrows() -> None:
+    component = np.ones(hp.nside2npix(2))
+    fig = mollweide(
+        component, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False,
+    )
+    ax = fig.axes[0]
+    collection_count = len(ax.collections)
+
+    mollweide(
+        (component, component),
+        ax=ax,
+        plot_mode="vector_field",
+        n_theta=12,
+        n_phi=24,
+        vector_kwargs={"method": "streamplot", "alpha": 0.35},
+    )
+
+    vector_lines = ax.collections[collection_count:]
+    assert len(vector_lines) == 1
+    assert vector_lines[0].get_alpha() == pytest.approx(0.35)
+    assert ax.patches
+    assert all(arrow.get_alpha() == pytest.approx(0.35) for arrow in ax.patches)
+
+
+def test_plot_modes_have_layered_zorders_and_accept_an_override() -> None:
+    component = np.ones(hp.nside2npix(2))
+    mask = np.ones_like(component, dtype=bool)
+    mask[:4] = False
+    fig = mollweide(
+        component, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False,
+    )
+    ax = fig.axes[0]
+    assert any(
+        artist.get_zorder() == pytest.approx(1.0) for artist in ax.collections
+    )
+
+    mollweide(mask, ax=ax, plot_mode="overlay_mask", n_theta=12, n_phi=24)
+    assert ax.images[-1].get_zorder() == pytest.approx(3.0)
+
+    collection_count = len(ax.collections)
+    mollweide(
+        (component, component),
+        ax=ax,
+        plot_mode="vector_field",
+        n_theta=12,
+        n_phi=24,
+        vector_kwargs={"method": "quiver"},
+        zorder=7.5,
+    )
+    assert ax.collections[collection_count:].pop().get_zorder() == pytest.approx(7.5)
 
 
 def test_vector_field_requires_matching_component_maps() -> None:

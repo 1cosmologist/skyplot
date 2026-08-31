@@ -175,7 +175,8 @@ def mollweide(
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
-    alpha: float = 1.0,
+    alpha: float | None = None,
+    zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
@@ -241,8 +242,12 @@ def mollweide(
         This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
-    alpha : float, default=1.0
-        Layer opacity; mask overlays use ``0.25``.
+    alpha : float or None, default=None
+        Layer opacity. Mask overlays default to ``0.25`` when omitted; an
+        explicitly supplied value is used unchanged.
+    zorder : float or None, default=None
+        Artist drawing order. Scalar maps default to 1, vector fields to 2,
+        and mask overlays to 3.
     gridline_kwargs : dict or None, default=None
         Overrides for gridline color, style, width, spacing, or opacity.
     pcolormesh_kwargs : dict or None, default=None
@@ -269,6 +274,7 @@ def mollweide(
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
+        zorder=zorder,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
@@ -301,7 +307,8 @@ def orthographic(
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
-    alpha: float = 1.0,
+    alpha: float | None = None,
+    zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
@@ -365,8 +372,12 @@ def orthographic(
         This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
-    alpha : float, default=1.0
-        Layer opacity; mask overlays use ``0.25``.
+    alpha : float or None, default=None
+        Layer opacity. Mask overlays default to ``0.25`` when omitted; an
+        explicitly supplied value is used unchanged.
+    zorder : float or None, default=None
+        Artist drawing order. Scalar maps default to 1, vector fields to 2,
+        and mask overlays to 3.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh keyword arguments.
     vector_kwargs : dict or None, default=None
@@ -391,6 +402,7 @@ def orthographic(
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
+        zorder=zorder,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
@@ -424,7 +436,8 @@ def platecarree(
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
-    alpha: float = 1.0,
+    alpha: float | None = None,
+    zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
@@ -490,8 +503,12 @@ def platecarree(
         This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
-    alpha : float, default=1.0
-        Layer opacity; mask overlays use ``0.25``.
+    alpha : float or None, default=None
+        Layer opacity. Mask overlays default to ``0.25`` when omitted; an
+        explicitly supplied value is used unchanged.
+    zorder : float or None, default=None
+        Artist drawing order. Scalar maps default to 1, vector fields to 2,
+        and mask overlays to 3.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh options.
     vector_kwargs : dict or None, default=None
@@ -517,7 +534,7 @@ def platecarree(
         norm=norm, colorbar_title=colorbar_title, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_mask=overlay_mask,
-        overlay_color=overlay_color, alpha=alpha,
+        overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
@@ -552,7 +569,8 @@ def equidistantconic(
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
-    alpha: float = 1.0,
+    alpha: float | None = None,
+    zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
@@ -617,8 +635,12 @@ def equidistantconic(
         This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
-    alpha : float, default=1.0
-        Layer opacity; mask overlays use ``0.25``.
+    alpha : float or None, default=None
+        Layer opacity. Mask overlays default to ``0.25`` when omitted; an
+        explicitly supplied value is used unchanged.
+    zorder : float or None, default=None
+        Artist drawing order. Scalar maps default to 1, vector fields to 2,
+        and mask overlays to 3.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
         Extra gridline and mesh options.
     vector_kwargs : dict or None, default=None
@@ -658,7 +680,7 @@ def equidistantconic(
         norm=norm, colorbar_title=colorbar_title, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_mask=overlay_mask,
-        overlay_color=overlay_color, alpha=alpha,
+        overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
@@ -694,7 +716,8 @@ def gnomonic(
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     overlay_mask: bool = False,
     overlay_color: Any = "k",
-    alpha: float = 1.0,
+    alpha: float | None = None,
+    zorder: float | None = None,
     astro_orientation: bool = True,
     figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
@@ -759,8 +782,12 @@ def gnomonic(
         are ignored in vector mode.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
-    alpha : float, default=1.0
-        Image opacity.
+    alpha : float or None, default=None
+        Image opacity. Mask overlays default to ``0.25`` when omitted; an
+        explicitly supplied value is used unchanged.
+    zorder : float or None, default=None
+        Artist drawing order. Scalar maps default to 1, vector fields to 2,
+        and mask overlays to 3.
     astro_orientation : bool, default=True
         Display increasing longitude to the left.
     figsize : tuple[float, float], default=(5.5, 5.5)
@@ -805,8 +832,13 @@ def gnomonic(
             _plotlib._validate_binary_mask(data_arr)
             cmap = [overlay_color]
             vmin = vmax = None
-            alpha = 0.25
+            alpha = 0.25 if alpha is None else alpha
             add_colorbar = False
+    if alpha is None:
+        alpha = 1.0
+    zorder_is_explicit = zorder is not None
+    if zorder is None:
+        zorder = 3.0 if overlay_mask else 2.0 if vector_field else 1.0
     resolved_cmap = _with_bad_color(_resolve_cmap(cmap), badcolor)
     x_pix = np.arange(xsize, dtype=float) - 0.5 * (xsize - 1)
     y_pix = np.arange(ysize, dtype=float) - 0.5 * (ysize - 1)
@@ -852,6 +884,7 @@ def gnomonic(
     }
     if imshow_kwargs is not None:
         draw_kwargs.update(imshow_kwargs)
+    draw_kwargs["zorder"] = zorder
     half_pix = 0.5 * np.degrees(plane_pixel_size) * 60.0
     extent = [
         float(x_plane_arcmin[0] - half_pix), float(x_plane_arcmin[-1] + half_pix),
@@ -869,7 +902,8 @@ def gnomonic(
             ax, lon=x_plane_grid * 180.0 / np.pi * 60.0,
             lat=y_plane_grid * 180.0 / np.pi * 60.0, u=u_values, v=v_values,
             vector_kwargs=vector_kwargs, n_theta=ysize, n_phi=xsize,
-            figsize=tuple(fig.get_size_inches()), resolution=None,
+            figsize=tuple(fig.get_size_inches()), resolution=None, zorder=zorder,
+            force_zorder=zorder_is_explicit,
         )
     if astro_orientation != ax.xaxis_inverted():
         ax.invert_xaxis()
@@ -911,6 +945,7 @@ def gnomonic(
         "plot_mode": plot_mode, "overlay_mask": overlay_mask,
         "vector_method": vector_method,
         "alpha": alpha,
+        "zorder": zorder,
         "colorbar_orientation": "horizontal",
     }
     if created_fig:

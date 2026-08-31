@@ -92,6 +92,7 @@ scalar color options are ignored in this mode.
        ax=fig.axes[0],
        badcolor=None,
        plot_mode="overlay_mask",
+       alpha=0.4,
        overlay_color="k",
        show_gridlines=False,
    )

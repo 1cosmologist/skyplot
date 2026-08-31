@@ -842,7 +842,8 @@ def _draw_vector_field(
     ax: Any, *, lon: np.ndarray, lat: np.ndarray, u: np.ndarray, v: np.ndarray,
     vector_kwargs: dict[str, Any] | None, n_theta: int, n_phi: int,
     figsize: tuple[float, float], resolution: Literal["low", "medium", "high"] | None,
-    transform: Any | None = None,
+    transform: Any | None = None, zorder: float = 2.0,
+    force_zorder: bool = False,
 ) -> str:
     """Draw a streamplot or quiver layer and return the selected method."""
     options = {} if vector_kwargs is None else dict(vector_kwargs)
@@ -857,11 +858,22 @@ def _draw_vector_field(
         resolution=resolution,
     )
     defaults.update(options)
+    if force_zorder or "zorder" not in defaults:
+        defaults["zorder"] = zorder
     call_transform = {} if transform is None else {"transform": transform}
     u = np.ma.masked_invalid(u)
     v = np.ma.masked_invalid(v)
     if method == "streamplot":
-        ax.streamplot(lon, lat, u, v, **call_transform, **defaults)
+        # ``Axes.streamplot`` does not accept an ``alpha`` keyword, unlike
+        # ``Axes.quiver``. Apply it to the returned artists so vector_kwargs
+        # provides consistent opacity support for both methods.
+        alpha = defaults.pop("alpha", None)
+        arrow_start = len(ax.patches)
+        stream = ax.streamplot(lon, lat, u, v, **call_transform, **defaults)
+        if alpha is not None:
+            stream.lines.set_alpha(alpha)
+            for arrow in ax.patches[arrow_start:]:
+                arrow.set_alpha(alpha)
     else:
         row_step = defaults.pop("_row_step")
         column_step = defaults.pop("_column_step")
@@ -902,7 +914,8 @@ def plot_with_projection(
     gridline_adder: Callable[..., Any] | None = None,
     overlay_mask: bool = False,
     overlay_color: Any = "k",
-    alpha: float = 1.0,
+    alpha: float | None = None,
+    zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
@@ -994,8 +1007,12 @@ def plot_with_projection(
         masked and transparent. ``vmin`` and ``vmax`` are ignored.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
-    alpha : float, default=1.0
-        Opacity of the plotted layer. Mask overlays use ``0.25``.
+    alpha : float or None, default=None
+        Opacity of the plotted layer. Mask overlays default to ``0.25`` when
+        omitted; an explicitly supplied value is used unchanged.
+    zorder : float or None, default=None
+        Artist drawing order. Scalar maps default to 1, vector fields to 2,
+        and mask overlays to 3. An explicit value is used unchanged.
     gridline_kwargs : dict or None, default=None
         Gridline option overrides.
     pcolormesh_kwargs : dict or None, default=None
@@ -1058,8 +1075,13 @@ def plot_with_projection(
         add_colorbar = False
         vmin = None
         vmax = None
-        alpha = 0.25
+        alpha = 0.25 if alpha is None else alpha
         cmap = ListedColormap([overlay_color])
+    elif alpha is None:
+        alpha = 1.0
+    zorder_is_explicit = zorder is not None
+    if zorder is None:
+        zorder = 3.0 if overlay_mask else 2.0 if vector_field else 1.0
     ccrs = _get_cartopy_crs_module()
     resolved_cmap = _with_bad_color(
         _resolve_cmap(cmap),
@@ -1151,6 +1173,9 @@ def plot_with_projection(
     }
     if pcolormesh_kwargs is not None:
         mesh_kwargs.update(pcolormesh_kwargs)
+    # The public zorder argument is authoritative and must not be passed
+    # twice when legacy pcolormesh_kwargs also contains ``zorder``.
+    mesh_kwargs.pop("zorder", None)
     if overlay_mask:
         mesh_kwargs["alpha"] = alpha
 
@@ -1166,7 +1191,33 @@ def plot_with_projection(
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
     quad = None
-    if not vector_field:
+    if overlay_mask and projection_name == "mollweide":
+        # A global, transparent QuadMesh is split into many overlapping
+        # polygons by Cartopy at the Mollweide wrap seam.  Semi-transparent
+        # polygon edges then accumulate unevenly, which shows up as a fine
+        # dotted/ripple pattern in otherwise uniform masked regions.  Let
+        # Cartopy warp one raster instead: it is composited once and keeps
+        # the zero-valued mask region visually uniform.
+        #
+        # ``values`` is on an ascending latitude/longitude centre grid, so
+        # these are its pixel boundaries rather than its centre coordinates.
+        # Retain the sampling resolution (or Cartopy's sensible 750-pixel
+        # minimum for smaller preview grids) during the warp.
+        quad = ax.imshow(
+            values,
+            transform=ccrs.PlateCarree(),
+            extent=(-180.0, 180.0, -90.0, 90.0),
+            origin="lower",
+            interpolation="nearest",
+            regrid_shape=max(750, n_theta),
+            cmap=mesh_cmap,
+            vmin=vmin,
+            vmax=vmax,
+            norm=norm,
+            alpha=alpha,
+            zorder=zorder,
+        )
+    elif not vector_field:
         quad = ax.pcolormesh(
             lon,
             lat,
@@ -1176,6 +1227,7 @@ def plot_with_projection(
             vmin=vmin,
             vmax=vmax,
             norm=norm,
+            zorder=zorder,
             **mesh_kwargs,
         )
 
@@ -1185,7 +1237,8 @@ def plot_with_projection(
             ax, lon=lon, lat=lat, u=u_values, v=v_values,
             vector_kwargs=vector_kwargs, n_theta=n_theta, n_phi=n_phi,
             figsize=tuple(fig.get_size_inches()), resolution=resolution,
-            transform=ccrs.PlateCarree(),
+            transform=ccrs.PlateCarree(), zorder=zorder,
+            force_zorder=zorder_is_explicit,
         )
 
     if add_colorbar:
@@ -1231,6 +1284,7 @@ def plot_with_projection(
         "overlay_mask": overlay_mask,
         "vector_method": vector_method,
         "alpha": alpha,
+        "zorder": zorder,
         "gridline_color": applied_gridline_kwargs["color"],
         "gridline_linestyle": applied_gridline_kwargs["linestyle"],
         "gridline_linewidth": applied_gridline_kwargs["linewidth"],
