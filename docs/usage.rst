@@ -189,7 +189,7 @@ is useful when comparing maps; do not also pass top-level ``vmin`` or
            extent=(-90.0, 120.0, -65.0, -5.0),
            coordinate_transform=('galactic', 'icrs'),
            resolution="high",
-           cmap="planck",
+           cmap="planck_log",
            norm=PlanckLogNorm(vmin=-300.0, vmax=300.0, linthresh=10.0),
            title="NPIPE CMB map at 143 GHz",
            gridline_kwargs={"linewidth": 0.4, "color": "white", "linestyle": "-"},
