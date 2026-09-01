@@ -1,21 +1,42 @@
 # SkyPlot
 
-`SkyPlot` is a Python package for visualizing CMB and other astrophysical sky maps stored as HEALPix arrays or `pixell.ndmap`.
-It samples maps with `healpy` at configurable angular coordinates and renders them with Matplotlib + Cartopy using `pcolormesh`.
+SkyPlot is a Python visualization library for CMB and astrophysical sky maps.
+It provides one Matplotlib-based plotting interface for full-sky HEALPix maps
+and two-dimensional WCS-backed arrays, with Cartopy projections, map overlays,
+and publication-oriented output.
 
-## Features
+Documentation: <https://skyplot.readthedocs.io> · Source and issues:
+<https://github.com/1cosmologist/skyplot>
 
-- HEALPix sampling at arbitrary `theta`/`phi` values
-- Input flexibility: 1D HEALPix arrays, 2D WCS arrays (`wcs=`), or ndmap-like objects with `.wcs`
-- Full-sky grid sampling with explicit `low`/`medium`/`high` resolution presets
-- Cartopy-powered `pcolormesh` rendering (true filled-cell map)
-- Transparent streamplot or quiver overlays for vector fields, layered onto a
-  separately rendered magnitude map
-- Supported projections include `mollweide`, `orthographic`, `platecarree`, `equidistantconic`
-- Uses geographic transforms (`PlateCarree`) so full-sky data is projected consistently
-- `cmap` accepts Matplotlib colormap names and names from the `colormaps` package
-- Multiple export formats (`png`, `jpg`, `svg`, `pdf`, `eps`)
-- Bundled fontset support: packaged fonts can become the default sans-serif stack automatically
+## Highlights
+
+- Plot 1D HEALPix arrays, 2D arrays with an Astropy WCS, and ndmap-like
+  objects carrying a `.wcs` attribute.
+- Render Mollweide, Orthographic, Plate Carrée, Equidistant Conic, and local
+  Gnomonic views.
+- Reproject a map between Astropy coordinate frames while plotting.
+- Overlay binary masks, streamlines, or quiver vectors on an existing map.
+- Use Matplotlib colormaps as well as palettes from
+  [`colormaps`](https://pratiman-91.github.io/colormaps/).
+- Export figures as PNG, JPG, SVG, PDF, or EPS.
+
+## Installation
+
+Install from conda-forge (recommended):
+
+```console
+conda install -c conda-forge skyplot
+```
+
+For a source or development installation:
+
+```console
+git clone https://github.com/1cosmologist/skyplot.git
+cd skyplot
+python -m pip install -e '.[dev,docs]'
+```
+
+SkyPlot requires Python 3.10 or later.
 
 ## Quick start
 
@@ -26,81 +47,113 @@ import numpy as np
 from skyplot import mollweide, save_figure
 
 nside = 64
-npix = hp.nside2npix(nside)
-hp_map = np.random.default_rng(1234).normal(size=npix)
+sky_map = np.random.default_rng(1234).normal(size=hp.nside2npix(nside))
 
 fig = mollweide(
-    hp_map,
-    projection_kwargs={"central_longitude": 120.0},
-    cmap="batlow",  # from `colormaps`, or use Matplotlib names like "viridis"
-    figsize=(12, 6),
-    dpi=300,
-    title="Example CMB-like Map",
-)
-fig.show()
-
-# Display a Galactic map on an ICRS longitude/latitude grid. The transform
-# states (source_frame, display_frame), while coordinate_frame is optional
-# figure metadata. These keywords are available on non-gnomonic projections.
-icrs_fig = mollweide(
-    hp_map,
-    coordinate_frame="galactic",
-    coordinate_transform=("galactic", "icrs"),
-)
-
-# WCS maps infer the longitude/latitude world-axis order from their WCS
-# metadata, including RA/Dec and Galactic/ecliptic longitude/latitude axes.
-# For a WCS with ambiguous metadata, provide the *zero-based WCS world-axis*
-# indices as (longitude_axis, latitude_axis). For example, native (Dec, RA)
-# world coordinates use (1, 0); these are not NumPy array-axis indices.
-# For a WCS that retains additional world axes, the same explicit mapping is
-# supported when the 2D data shape matches its spatial pixel axes (either
-# NumPy (latitude, longitude) or its transpose). Non-spatial axes are
-# evaluated at their WCS reference values; slice coupled WCS/data cubes first.
-wcs_fig = mollweide(
-    wcs_map,
-    wcs=wcs,
-    world_axis_mapping=(1, 0),
-)
-
-# healpy.UNSEEN and NaN samples are rendered as grey by default. Customize
-# the input sentinel and missing-data color when needed.
-masked_fig = mollweide(
-    hp_map,
-    badvalue=hp.UNSEEN,
-    badcolor="lightgrey",
+    sky_map,
+    resolution="medium",
+    cmap="batlow",
+    title="Example CMB-like map",
+    colorbar_title=r"$\mu$K",
 )
 
 save_figure(fig, "cmb_map.png", figsize=(12, 6), dpi=300)
-
-# Preset map densities (n_theta, n_phi)
-# low: (480, 960), medium: (720, 1440), high: (1440, 2880)
 ```
+
+In a notebook, display a returned figure explicitly:
+
+```python
+from IPython.display import display
+
+display(fig)
+```
+
+## Layers: masks and vector fields
+
+Each plotting function accepts `plot_mode`. Use the ordinary `"map"` mode for
+a scalar map, `"overlay_mask"` for a binary mask, and `"vector_field"` for a
+transparent streamplot or quiver layer. Render the scalar magnitude first;
+then pass its Cartopy axes to the overlay call.
+
+```python
+P = np.hypot(q_map, u_map)
+fig = mollweide(P, cmap="lipari", colorbar_title="Polarized intensity P")
+
+# Components in the displayed local east/north basis.
+psi = 0.5 * np.arctan2(u_map, q_map)
+east = np.sin(psi)
+north = -np.cos(psi)
+
+mollweide(
+    (east, north),
+    ax=fig.axes[0],
+    plot_mode="vector_field",
+    vector_kwargs={
+        "method": "streamplot",  # or "quiver"
+        "color": "white",
+        "linewidth": 0.5,
+        "arrowstyle": "-",
+        "density": 1.2,
+    },
+)
+```
+
+For HEALPix/COSMO polarization conventions, the components above give
+`Q > 0, U = 0` along the North–South axis and `Q = 0, U > 0` along the
+North-West to South-East axis. IAU products use the opposite Stokes `U` sign;
+confirm and convert the data convention before constructing `psi`.
+
+To overlay the invalid region of a binary allowed-pixel mask:
+
+```python
+mollweide(
+    allowed_mask,
+    ax=fig.axes[0],
+    plot_mode="overlay_mask",
+    overlay_color="black",
+    alpha=0.35,
+)
+```
+
+## WCS-backed arrays
+
+Pass a 2D array and its WCS with `wcs=`. SkyPlot normally identifies the
+longitude and latitude world axes from WCS metadata. If the WCS has ambiguous
+or additional world axes, set `world_axis_mapping=(longitude_axis,
+latitude_axis)` using **zero-based WCS world-axis indices**, not NumPy array
+axes. Slice a coupled data cube and its WCS to the intended two-dimensional
+plane before plotting.
+
+```python
+fig = mollweide(
+    wcs_map,
+    wcs=wcs,
+    world_axis_mapping=(1, 0),  # e.g. native world order (Dec, RA)
+)
+```
+
+## Styling
+
+SkyPlot returns standard Matplotlib figures, so use Matplotlib configuration
+and normal artist customization. For example, a local dark style can be
+applied with `plt.rc_context(...)`; Cartopy map boundaries use the separate
+`"geo"` spine and can be styled through `fig.axes[0].spines["geo"]`.
+See the [customization guide](https://skyplot.readthedocs.io/en/latest/usage.html)
+for a complete example, including colorbar styling.
 
 ## Development
 
-```bash
-pip install -e .[dev,docs]
-pytest
+Run the test suite from a source checkout:
+
+```console
+python -m pytest
 ```
 
-<!-- ## Custom fontset packaging
+The documentation source is in `docs/`; build it after installing the `docs`
+extra with:
 
-To ship a custom sans-serif fontset with this package:
+```console
+python -m sphinx -b html docs docs/_build/html
+```
 
-1. Add your distributable font files (`.ttf`, `.otf`, `.ttc`) to `skyplot/fonts/`.
-2. Reinstall the package (`pip install -e .` for editable installs).
-3. Import `skyplot`; bundled fonts are auto-registered and prepended to Matplotlib `font.sans-serif`.
-
-You can also call these helpers explicitly:
-
-```python
-from skyplot import register_package_fonts, configure_default_sans_serif
-
-register_package_fonts()
-configure_default_sans_serif()
-``` -->
-
-## Documentation
-
-Sphinx documentation is in the `docs/` directory and configured for Read the Docs using `.readthedocs.yaml`.
+SkyPlot is licensed under GPL-3.0-only.
