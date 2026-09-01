@@ -25,6 +25,7 @@ py.install_sources(
   [
     '__init__.py',
     'fonts.py',
+    'normalization.py',
     'plotlib.py',
     'plotting.py',
     'sampling.py',

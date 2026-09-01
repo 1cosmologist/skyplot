@@ -29,7 +29,6 @@ from skyplot.plotting import (
     platecarree,
 )
 from skyplot.plotlib import (
-    _display_grid_cache,
     _get_display_grid,
     _sample_wcs_map,
     _transform_display_coordinates,
@@ -128,25 +127,16 @@ def test_plotting_public_api_delegates_to_plotlib() -> None:
     assert not hasattr(plotlib, "plot_gnomonic")
 
 
-def test_display_grid_cache_reuses_immutable_geometry() -> None:
-    _display_grid_cache.clear()
+def test_display_grid_has_sorted_longitude_and_latitude() -> None:
+    lon, lat = _get_display_grid(8, 16)
 
-    lon_a, lat_a = _get_display_grid(8, 16)
-    lon_b, lat_b = _get_display_grid(8, 16)
-
-    assert lon_a is lon_b
-    assert lat_a is lat_b
-    assert not lon_a.flags.writeable
-    assert not lat_a.flags.writeable
-    assert lon_a.shape == (8, 16)
-    assert np.all(np.diff(lon_a[0]) >= 0.0)
-    assert np.all(np.diff(lat_a[:, 0]) >= 0.0)
+    assert lon.shape == (8, 16)
+    assert np.all(np.diff(lon[0]) >= 0.0)
+    assert np.all(np.diff(lat[:, 0]) >= 0.0)
 
 
 def test_display_grid_uses_healpix_astronomy_phi_direction() -> None:
     """Increasing HEALPix phi must move leftward, as in healpy.mollview."""
-    _display_grid_cache.clear()
-
     lon, _ = _get_display_grid(4, 8)
 
     # The sorted Cartopy longitude grid is the negated HEALPix phi sequence:

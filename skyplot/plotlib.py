@@ -24,7 +24,6 @@
 """Matplotlib + Cartopy visualization routines for HEALPix sky maps."""
 
 from __future__ import annotations
-from collections import OrderedDict
 from importlib import import_module
 from typing import Any, Callable, Literal, Sequence
 
@@ -82,12 +81,6 @@ DPI_PRESETS: dict[str, int] = {
 
 _last_figure: Figure | None = None
 
-# Cached display geometry is independent of map values and WCS metadata. Keep
-# only two grids: a high-resolution pair of float64 lon/lat arrays is about
-# 66 MiB, while retaining high and medium costs roughly 83 MiB.
-_DISPLAY_GRID_CACHE_MAXSIZE = 2
-_display_grid_cache: OrderedDict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = OrderedDict()
-
 
 def _get_last_figure() -> Figure | None:
     """Return the most recently created skyplot figure, if any."""
@@ -95,7 +88,7 @@ def _get_last_figure() -> Figure | None:
 
 
 def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]:
-    """Return an immutable, astronomy-oriented display grid from a small LRU cache.
+    """Return an astronomy-oriented longitude/latitude display grid.
 
     Parameters
     ----------
@@ -107,22 +100,9 @@ def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]
     Returns
     -------
     tuple[numpy.ndarray, numpy.ndarray]
-        Read-only ``(longitude_deg, latitude_deg)`` arrays in the exact order
-        used for Cartopy rendering.
-
-    Notes
-    -----
-    The cache stores display geometry only. WCS conversion and map sampling
-    always run for the current map, WCS object, coordinate transform, and
-    world-axis mapping, so cached coordinates cannot be reused as pixel
-    coordinates for an incompatible map.
+        ``(longitude_deg, latitude_deg)`` arrays in the exact order used for
+        Cartopy rendering.
     """
-    key = (n_theta, n_phi)
-    cached = _display_grid_cache.get(key)
-    if cached is not None:
-        _display_grid_cache.move_to_end(key)
-        return cached
-
     theta, phi = make_theta_phi_grid(n_theta=n_theta, n_phi=n_phi)
     lon = np.degrees(phi)
     lon = ((lon + 180.0) % 360.0) - 180.0
@@ -139,11 +119,6 @@ def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]
     lat_sort_idx = np.argsort(lat[:, 0])
     lon = lon[lat_sort_idx, :]
     lat = lat[lat_sort_idx, :]
-    lon.setflags(write=False)
-    lat.setflags(write=False)
-    _display_grid_cache[key] = (lon, lat)
-    if len(_display_grid_cache) > _DISPLAY_GRID_CACHE_MAXSIZE:
-        _display_grid_cache.popitem(last=False)
     return lon, lat
 
 

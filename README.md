@@ -44,7 +44,7 @@ SkyPlot requires Python 3.10 or later.
 import healpy as hp
 import numpy as np
 
-from skyplot import mollweide, save_figure
+from skyplot import PlanckLogNorm, mollweide, save_figure
 
 nside = 64
 sky_map = np.random.default_rng(1234).normal(size=hp.nside2npix(nside))
@@ -59,6 +59,11 @@ fig = mollweide(
 
 save_figure(fig, "cmb_map.png", figsize=(12, 6), dpi=300)
 ```
+
+For the Planck-style symmetric asinh/logarithmic scaling, pass
+`norm=PlanckLogNorm()`. Unset limits are derived from the plotted map; pass
+explicit limits for a fixed shared scale. Use `linthresh=` to adjust the
+linear-region scale around zero.
 
 In a notebook, display a returned figure explicitly:
 

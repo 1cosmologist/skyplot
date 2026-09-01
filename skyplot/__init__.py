@@ -24,6 +24,7 @@
 """Skyplot package for HEALPix-based astrophysical sky-map visualization."""
 
 from .fonts import configure_default_sans_serif, register_package_fonts, setup_package_fonts
+from .normalization import PlanckLogNorm
 from .plotting import (
     AVAILABLE_PROJECTIONS,
     DPI_PRESETS,
@@ -46,6 +47,7 @@ __all__ = [
     "AVAILABLE_PROJECTIONS",
     "DPI_PRESETS",
     "FONT_SIZE_PRESETS",
+    "PlanckLogNorm",
     "RESOLUTION_PRESETS",
     "add_gridlines",
     "configure_default_sans_serif",

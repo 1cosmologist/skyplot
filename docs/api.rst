@@ -21,6 +21,13 @@ Most users should prefer :mod:`skyplot.plotting`.
    :members: plot_with_projection
 
 
+Normalization
+-------------
+
+.. automodule:: skyplot.normalization
+   :members:
+
+
 Sampling
 --------
 

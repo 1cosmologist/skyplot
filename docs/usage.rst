@@ -24,6 +24,7 @@ quicker previews.
    from skyplot import (
        AVAILABLE_PROJECTIONS,
        FONT_SIZE_PRESETS,
+       PlanckLogNorm,
        RESOLUTION_PRESETS,
        equidistantconic,
        gnomonic,
@@ -36,6 +37,11 @@ quicker previews.
    print("Available projections:", AVAILABLE_PROJECTIONS)
    print("Resolution presets:", RESOLUTION_PRESETS)
    print("Base font sizes (points):", FONT_SIZE_PRESETS)
+
+``PlanckLogNorm()`` provides the Planck-style symmetric asinh/logarithmic
+normalization. It derives unset limits from the plotted map; pass explicit
+``vmin`` and ``vmax`` when a fixed scale is needed. ``linthresh=10.0`` sets
+the scale of the linear region around zero and can be adjusted.
 
 Load a 1D HEALPix FITS map by setting ``map_path`` to a local file. The map
 must contain the field selected by ``field``; the notebook uses the first
@@ -53,6 +59,12 @@ field, ``field=0``.
    print("Map loaded:", map_path)
    print("npix:", hp_map.size, "nside:", hp.get_nside(hp_map))
    print("dtype:", hp_map.dtype)
+
+For example:
+
+.. code-block:: python
+
+   fig = mollweide(hp_map, cmap="planck", norm=PlanckLogNorm(vmin=-1e4, vmax=1e4))
 
 Mollweide full-sky view
 -----------------------
@@ -141,8 +153,14 @@ SkyPlot returns an ordinary Matplotlib figure, so use Matplotlib's
 ``rc_context`` to apply a style locally.  For Cartopy projections, also set
 the ``"geo"`` spine explicitly: it is the map boundary and is separate from
 the normal Matplotlib axes spines.  The colorbar is an additional axes, so its
-spines, ticks, and label need the same foreground color. Here the map is Galactic 
+spines, ticks, and label need the same foreground color. Here the map is Galactic
 coordinates while the mask is in Celestial coordinates.
+
+``PlanckLogNorm`` provides the Planck-style symmetric asinh/logarithmic
+color scaling. With no limits, it takes ``vmin`` and ``vmax`` from the plotted
+map. This example instead sets a fixed symmetric scale inside the norm, which
+is useful when comparing maps; do not also pass top-level ``vmin`` or
+``vmax``. ``linthresh`` controls the width of the near-zero linear region.
 
 .. code-block:: python
 
@@ -172,8 +190,7 @@ coordinates while the mask is in Celestial coordinates.
            coordinate_transform=('galactic', 'icrs'),
            resolution="high",
            cmap="planck",
-           vmin=-300.0,
-           vmax=300.0,
+           norm=PlanckLogNorm(vmin=-300.0, vmax=300.0, linthresh=10.0),
            title="NPIPE CMB map at 143 GHz",
            gridline_kwargs={"linewidth": 0.4, "color": "white", "linestyle": "-"},
            colorbar_title=r"$\mu$K${}_{\rm CMB}$",
@@ -197,6 +214,7 @@ coordinates while the mask is in Celestial coordinates.
            overlay_color="black",
            alpha=0.4,
            ax=map_ax,
+           coordinate_transform=("icrs", "icrs"),
        )
 
 .. figure:: figures/dark_mode.png
