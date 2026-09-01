@@ -528,12 +528,26 @@ def _sample_wcs_map(
             v01 = data[y1v, x0v]
             v11 = data[y1v, x1v]
 
-            sampled[valid] = (
-                (1.0 - wx) * (1.0 - wy) * v00
-                + wx * (1.0 - wy) * v10
-                + (1.0 - wx) * wy * v01
-                + wx * wy * v11
+            corners = np.stack([v00, v10, v01, v11])
+            weights = np.stack(
+                [
+                    (1.0 - wx) * (1.0 - wy),
+                    wx * (1.0 - wy),
+                    (1.0 - wx) * wy,
+                    wx * wy,
+                ]
             )
+            corner_valid = np.isfinite(corners)
+            weights = np.where(corner_valid, weights, 0.0)
+            corners = np.where(corner_valid, corners, 0.0)
+            weight_sum = weights.sum(axis=0)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                result = np.where(
+                    weight_sum > 0,
+                    (weights * corners).sum(axis=0) / weight_sum,
+                    np.nan,
+                )
+            sampled[valid] = result
     else:
         if np.any(valid):
             xi = np.clip(np.rint(x[valid]).astype(int), 0, ncols - 1)
