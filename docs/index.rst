@@ -32,8 +32,16 @@ Features
 Installation
 ------------
 
-Clone the repository and install the package in an isolated Python environment.
-The editable install keeps your environment in sync with local source changes.
+Install from conda-forge (recommended). This installs SkyPlot and its compiled
+geospatial dependencies in a compatible environment.
+
+.. code-block:: console
+
+   conda install -c conda-forge skyplot
+
+For development, clone the repository and install it in an isolated Python
+environment. The editable install keeps your environment in sync with local
+source changes.
 
 .. code-block:: console
 
