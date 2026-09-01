@@ -141,7 +141,8 @@ SkyPlot returns an ordinary Matplotlib figure, so use Matplotlib's
 ``rc_context`` to apply a style locally.  For Cartopy projections, also set
 the ``"geo"`` spine explicitly: it is the map boundary and is separate from
 the normal Matplotlib axes spines.  The colorbar is an additional axes, so its
-spines, ticks, and label need the same foreground color.
+spines, ticks, and label need the same foreground color. Here the map is Galactic 
+coordinates while the mask is in Celestial coordinates.
 
 .. code-block:: python
 
@@ -168,6 +169,7 @@ spines, ticks, and label need the same foreground color.
                "standard_parallels": (-70.0, -15.0),
            },
            extent=(-90.0, 120.0, -65.0, -5.0),
+           coordinate_transform=('galactic', 'icrs'),
            resolution="high",
            cmap="planck",
            vmin=-300.0,
