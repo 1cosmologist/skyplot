@@ -489,7 +489,7 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
         ax=ax,
         n_theta=8,
         n_phi=16,
-        overlay_mask=True,
+        plot_mode="overlay_mask",
         overlay_color="magenta",
         alpha=0.4,
         cmap="viridis",
@@ -514,6 +514,33 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
     assert payload["vmax"] is None
 
 
+def test_equidistantconic_mask_overlay_uses_a_single_warped_image() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    mask = np.ones_like(hp_map, dtype=bool)
+    mask[:12] = False
+    fig = equidistantconic(
+        hp_map,
+        extent=(-90.0, 120.0, -80.0, -5.0),
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    equidistantconic(
+        mask,
+        ax=fig.axes[0],
+        plot_mode="overlay_mask",
+        n_theta=12,
+        n_phi=24,
+        alpha=0.4,
+    )
+
+    overlay = fig.axes[0].images[-1]
+    assert np.ma.isMaskedArray(overlay.get_array())
+    assert overlay.get_alpha() == pytest.approx(0.4)
+
+
 def test_overlay_mask_requires_binary_input() -> None:
     non_binary_mask = np.ones(hp.nside2npix(2))
     non_binary_mask[0] = 2.0
@@ -523,7 +550,7 @@ def test_overlay_mask_requires_binary_input() -> None:
             non_binary_mask,
             n_theta=8,
             n_phi=16,
-            overlay_mask=True,
+            plot_mode="overlay_mask",
         )
 
 
@@ -632,7 +659,7 @@ def test_vector_field_requires_existing_magnitude_axes() -> None:
         mollweide((component, component), plot_mode="vector_field", n_theta=8, n_phi=16)
 
 
-def test_plot_mode_overlay_mask_is_equivalent_to_legacy_switch() -> None:
+def test_plot_mode_overlay_mask_is_recorded() -> None:
     mask = np.ones(hp.nside2npix(2), dtype=bool)
     mask[:4] = False
 
@@ -643,7 +670,7 @@ def test_plot_mode_overlay_mask_is_equivalent_to_legacy_switch() -> None:
         n_phi=16,
     )
 
-    assert getattr(fig, "_skyplot_payload")["overlay_mask"] is True
+    assert getattr(fig, "_skyplot_payload")["plot_mode"] == "overlay_mask"
 
 
 def test_existing_axes_extent_overrides_extent_argument() -> None:

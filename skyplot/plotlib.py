@@ -765,15 +765,13 @@ def _gnomonic_inverse(
     return lon_deg, lat_deg
 
 
-def _resolve_plot_mode(plot_mode: str, overlay_mask: bool) -> str:
-    """Normalize plot mode, retaining the legacy ``overlay_mask`` switch."""
+def _validate_plot_mode(plot_mode: str) -> str:
+    """Validate and return a supported rendering mode."""
     if plot_mode not in {"map", "overlay_mask", "vector_field"}:
         raise ValueError(
             "plot_mode must be one of: 'map', 'overlay_mask', or 'vector_field'."
         )
-    if overlay_mask and plot_mode not in {"map", "overlay_mask"}:
-        raise ValueError("overlay_mask cannot be combined with plot_mode='vector_field'.")
-    return "overlay_mask" if overlay_mask else plot_mode
+    return plot_mode
 
 
 def _resolve_vector_maps(
@@ -912,7 +910,6 @@ def plot_with_projection(
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
     gridline_adder: Callable[..., Any] | None = None,
-    overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -1001,10 +998,6 @@ def plot_with_projection(
         overlay. Draw its magnitude in a separate ``plot_mode="map"`` call
         before passing that figure's axes here. Scalar color-scale arguments
         are ignored.
-    overlay_mask : bool, default=False
-        Treat ``map_data`` as a binary allowed-pixel mask. Invalid (zero or
-        false) samples are drawn as a translucent overlay; valid samples are
-        masked and transparent. ``vmin`` and ``vmax`` are ignored.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -1050,8 +1043,8 @@ def plot_with_projection(
 
     font_size = _font_size_for_resolution(resolution)
 
-    plot_mode = _resolve_plot_mode(plot_mode, overlay_mask)
-    overlay_mask = plot_mode == "overlay_mask"
+    plot_mode = _validate_plot_mode(plot_mode)
+    is_overlay_mask = plot_mode == "overlay_mask"
     vector_field = plot_mode == "vector_field"
     if vector_field and ax is None:
         raise ValueError(
@@ -1068,7 +1061,7 @@ def plot_with_projection(
         show_gridlines = False
     else:
         data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
-    if overlay_mask:
+    if is_overlay_mask:
         _validate_binary_mask(data_arr)
         interpolate = False
         show_gridlines = False
@@ -1081,11 +1074,11 @@ def plot_with_projection(
         alpha = 1.0
     zorder_is_explicit = zorder is not None
     if zorder is None:
-        zorder = 3.0 if overlay_mask else 2.0 if vector_field else 1.0
+        zorder = 3.0 if is_overlay_mask else 2.0 if vector_field else 1.0
     ccrs = _get_cartopy_crs_module()
     resolved_cmap = _with_bad_color(
         _resolve_cmap(cmap),
-        (0.0, 0.0, 0.0, 0.0) if overlay_mask else badcolor,
+        (0.0, 0.0, 0.0, 0.0) if is_overlay_mask else badcolor,
     )
 
     lon, lat = _get_display_grid(n_theta=n_theta, n_phi=n_phi)
@@ -1115,7 +1108,7 @@ def plot_with_projection(
             world_axis_mapping=world_axis_mapping, badvalue=badvalue,
         )
 
-    if overlay_mask:
+    if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
 
     created_fig = ax is None
@@ -1176,7 +1169,7 @@ def plot_with_projection(
     # The public zorder argument is authoritative and must not be passed
     # twice when legacy pcolormesh_kwargs also contains ``zorder``.
     mesh_kwargs.pop("zorder", None)
-    if overlay_mask:
+    if is_overlay_mask:
         mesh_kwargs["alpha"] = alpha
 
     mesh_cmap = resolved_cmap
@@ -1191,13 +1184,13 @@ def plot_with_projection(
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
     quad = None
-    if overlay_mask and projection_name == "mollweide":
-        # A global, transparent QuadMesh is split into many overlapping
-        # polygons by Cartopy at the Mollweide wrap seam.  Semi-transparent
-        # polygon edges then accumulate unevenly, which shows up as a fine
-        # dotted/ripple pattern in otherwise uniform masked regions.  Let
-        # Cartopy warp one raster instead: it is composited once and keeps
-        # the zero-valued mask region visually uniform.
+    if is_overlay_mask:
+        # A transparent projected QuadMesh can be split into overlapping
+        # polygons by Cartopy. Its semi-transparent edges then accumulate
+        # unevenly, producing a fine dotted/ripple pattern in otherwise
+        # uniform masked regions (most visibly in full-sky and conic views).
+        # Let Cartopy warp one raster instead: it is composited once and
+        # keeps the zero-valued mask region visually uniform.
         #
         # ``values`` is on an ascending latitude/longitude centre grid, so
         # these are its pixel boundaries rather than its centre coordinates.
@@ -1281,7 +1274,6 @@ def plot_with_projection(
         "title": title,
         "show_gridlines": show_gridlines,
         "plot_mode": plot_mode,
-        "overlay_mask": overlay_mask,
         "vector_method": vector_method,
         "alpha": alpha,
         "zorder": zorder,

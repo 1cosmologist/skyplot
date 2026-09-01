@@ -65,8 +65,8 @@ Mask overlay (optional)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Load a Galactic-plane mask only if it is needed for this view. Zero-valued
-pixels are painted as a translucent overlay. Use ``plot_mode="overlay_mask"``;
-scalar color options are ignored in this mode.
+pixels are painted as a translucent overlay. Select this layer solely with
+``plot_mode="overlay_mask"``; scalar color options are ignored in this mode.
 
 .. code-block:: python
 
@@ -133,6 +133,75 @@ control than the shorthand ``norm="symlog"``.
    :width: 100%
 
    The notebook's regional Equidistant Conic rendering.
+
+Customization - Dark Mode
+-------------------------
+
+SkyPlot returns an ordinary Matplotlib figure, so use Matplotlib's
+``rc_context`` to apply a style locally.  For Cartopy projections, also set
+the ``"geo"`` spine explicitly: it is the map boundary and is separate from
+the normal Matplotlib axes spines.  The colorbar is an additional axes, so its
+spines, ticks, and label need the same foreground color.
+
+.. code-block:: python
+
+   import matplotlib.pyplot as plt
+
+   with plt.rc_context({
+       "figure.facecolor": "#101820",
+       "axes.facecolor": "#101820",
+       "axes.edgecolor": "white",
+       "text.color": "white",
+       "axes.labelcolor": "white",
+       "xtick.color": "white",
+       "ytick.color": "white",
+       "font.size": 10,
+       "font.family": "serif",
+       "font.serif": ["STIX Two Text"],
+       "mathtext.fontset": "stix",
+   }):
+       fig = equidistantconic(
+           npipe_143[0],
+           projection_kwargs={
+               "central_longitude": 15.0,
+               "central_latitude": -45.0,
+               "standard_parallels": (-70.0, -15.0),
+           },
+           extent=(-90.0, 120.0, -65.0, -5.0),
+           resolution="high",
+           cmap="planck",
+           vmin=-300.0,
+           vmax=300.0,
+           title="NPIPE CMB map at 143 GHz",
+           gridline_kwargs={"linewidth": 0.4, "color": "white", "linestyle": "-"},
+           colorbar_title=r"$\mu$K${}_{\rm CMB}$",
+       )
+
+       map_ax = fig.axes[0]
+       map_ax.spines["geo"].set_edgecolor("white")
+       map_ax.spines["geo"].set_linewidth(0.8)
+
+       cbar_ax = fig.axes[-1]
+       for spine in cbar_ax.spines.values():
+           spine.set_edgecolor("white")
+           spine.set_linewidth(0.8)
+       cbar_ax.tick_params(colors="white")
+       cbar_ax.xaxis.label.set_color("white")
+
+       equidistantconic(
+           mask,
+           resolution="high",
+           plot_mode="overlay_mask",
+           overlay_color="black",
+           alpha=0.4,
+           ax=map_ax,
+       )
+
+.. figure:: figures/dark_mode.png
+   :alt: Dark-themed Equidistant Conic CMB map with a translucent mask overlay.
+   :width: 100%
+
+   Equidistant Conic rendering styled with a local Matplotlib dark theme.
 
 Orthographic view
 -----------------

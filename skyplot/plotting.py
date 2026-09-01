@@ -173,7 +173,6 @@ def mollweide(
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
-    overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -237,9 +236,6 @@ def mollweide(
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
-    overlay_mask : bool, default=False
-        Render a binary allowed-pixel mask as an invalid-pixel overlay.
-        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -273,7 +269,7 @@ def mollweide(
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
-        plot_mode=plot_mode, overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
+        plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
@@ -305,7 +301,6 @@ def orthographic(
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
-    overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -367,9 +362,6 @@ def orthographic(
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
-    overlay_mask : bool, default=False
-        Render a binary allowed-pixel mask as an invalid-pixel overlay.
-        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -401,7 +393,7 @@ def orthographic(
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
         colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
-        plot_mode=plot_mode, overlay_mask=overlay_mask, overlay_color=overlay_color, alpha=alpha,
+        plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
         gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
@@ -434,7 +426,6 @@ def platecarree(
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
-    overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -498,9 +489,6 @@ def platecarree(
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
-    overlay_mask : bool, default=False
-        Render a binary allowed-pixel mask as an invalid-pixel overlay.
-        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -533,7 +521,7 @@ def platecarree(
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
-        plot_mode=plot_mode, overlay_mask=overlay_mask,
+        plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
@@ -567,7 +555,6 @@ def equidistantconic(
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
-    overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -630,9 +617,6 @@ def equidistantconic(
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
-    overlay_mask : bool, default=False
-        Render a binary allowed-pixel mask as an invalid-pixel overlay.
-        This legacy switch is equivalent to ``plot_mode="overlay_mask"``.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -679,7 +663,7 @@ def equidistantconic(
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
-        plot_mode=plot_mode, overlay_mask=overlay_mask,
+        plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
         pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
@@ -714,7 +698,6 @@ def gnomonic(
     gridline_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
-    overlay_mask: bool = False,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -774,8 +757,6 @@ def gnomonic(
     plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Use a separate scalar-map call to render vector magnitude.
-    overlay_mask : bool, default=False
-        Legacy alias for ``plot_mode="overlay_mask"``.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
@@ -813,8 +794,8 @@ def gnomonic(
         raise ValueError("Gnomonic views must remain within 90 degrees of the tangent point.")
 
     lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
-    plot_mode = _plotlib._resolve_plot_mode(plot_mode, overlay_mask)
-    overlay_mask = plot_mode == "overlay_mask"
+    plot_mode = _plotlib._validate_plot_mode(plot_mode)
+    is_overlay_mask = plot_mode == "overlay_mask"
     vector_field = plot_mode == "vector_field"
     if vector_field and ax is None:
         raise ValueError(
@@ -828,7 +809,7 @@ def gnomonic(
         show_gridlines = False
     else:
         data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
-        if overlay_mask:
+        if is_overlay_mask:
             _plotlib._validate_binary_mask(data_arr)
             cmap = [overlay_color]
             vmin = vmax = None
@@ -838,7 +819,7 @@ def gnomonic(
         alpha = 1.0
     zorder_is_explicit = zorder is not None
     if zorder is None:
-        zorder = 3.0 if overlay_mask else 2.0 if vector_field else 1.0
+        zorder = 3.0 if is_overlay_mask else 2.0 if vector_field else 1.0
     resolved_cmap = _with_bad_color(_resolve_cmap(cmap), badcolor)
     x_pix = np.arange(xsize, dtype=float) - 0.5 * (xsize - 1)
     y_pix = np.arange(ysize, dtype=float) - 0.5 * (ysize - 1)
@@ -869,7 +850,7 @@ def gnomonic(
             interpolate=interpolate, world_axis_mapping=world_axis_mapping,
             badvalue=badvalue,
         )
-    if overlay_mask:
+    if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
 
     created_fig = ax is None
@@ -942,7 +923,7 @@ def gnomonic(
         "vmin": vmin, "vmax": vmax, "norm": str(norm) if norm is not None else None,
         "cmap": str(cmap), "badvalue": badvalue, "badcolor": str(badcolor),
         "colorbar_title": colorbar_title, "title": title, "show_gridlines": show_gridlines,
-        "plot_mode": plot_mode, "overlay_mask": overlay_mask,
+        "plot_mode": plot_mode,
         "vector_method": vector_method,
         "alpha": alpha,
         "zorder": zorder,
