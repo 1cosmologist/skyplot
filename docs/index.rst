@@ -50,13 +50,6 @@ For the test and documentation dependencies, install the optional extras:
 
    python -m pip install -e '.[dev,docs]'
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents
-
-   usage
-   api
-
 Longitude convention
 --------------------
 
@@ -67,3 +60,11 @@ is the center of any map by default. With astro convention, the logitude increas
 (which wraps to :math:`0^\circ`). In `skyplot` we transform the :math:`180^\circ` to :math:`360^\circ` 
 range as :math:`{\rm longtude} - 360^\circ`. This is more suitable for passing arguments to the
 `extent` kwargs.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents
+
+   usage
+   api
+
