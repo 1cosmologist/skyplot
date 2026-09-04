@@ -1,15 +1,14 @@
-skyplot documentation
+SkyPlot Documentation
 ====================
 
-``skyplot`` provides HEALPix map sampling and Cartopy-projected pcolormesh rendering
-for CMB and other astrophysical sky maps.
+``skyplot`` is a visualization library for CMB and other astrophysical sky maps 
+and aims to make figures optimized for publications and presentations easier.
 
 Features
 --------
 
-- Rendering uses Matplotlib ``pcolormesh`` with Cartopy projections.
-- Inputs can be 1D HEALPix arrays, 2D arrays plus ``wcs=``, or ndmap-like
-  objects with a ``.wcs`` attribute.
+- Inputs can be 1D HEALPix arrays, 2D arrays plus ``wcs=``, or pixell 
+  ndmap-like objects with a ``.wcs`` attribute.
 - Available projections are ``mollweide``, ``orthographic``, ``platecarree``,
   ``equidistantconic``, and ``gnomonic``.
 - Preset sampling densities are ``low=(480, 960)``, ``medium=(720, 1440)``,
@@ -17,17 +16,10 @@ Features
 - ``cmap`` accepts Matplotlib colormap names and names from the ``colormaps``
   package. See `colormaps documentation <https://pratiman-91.github.io/colormaps/>`__
   for supported colormaps; ``planck`` and ``planck_log`` are also available.
-- Projection controls, including ``central_longitude`` and ``central_latitude``,
-  are passed through ``projection_kwargs``.
-- Set ``figsize`` and ``dpi`` to control figure pixel dimensions.
 - Binary mask and transparent vector overlays are available through
   ``plot_mode="overlay_mask"`` and ``plot_mode="vector_field"``. Vector
   overlays are drawn on axes from a prior scalar magnitude-map call.
-- Gnomonic views default to no graticules and display the center, patch size,
-  and pixel size as projection metadata; enable local graticules with
-  ``show_gridlines=True``.
-- Fonts in ``skyplot/fonts/`` are bundled and set as the default sans-serif
-  family on import.
+- Comes optimized for publication and presentation quality figures.
 
 Installation
 ------------
@@ -64,3 +56,14 @@ For the test and documentation dependencies, install the optional extras:
 
    usage
    api
+
+Longitude convention
+--------------------
+
+Important: `longitude` increases from :math:`-180^\circ` to :math:`180^\circ` from *left to right* 
+to keep the astro convention used in CMB map plots. :math:`({\rm lon}=0^\circ, {\rm lat}=0^\circ)` 
+is the center of any map by default. With astro convention, the logitude increases to the left till 
+:math:`180^\circ` and then wraps around increasing from :math:`180^\circ` to :math:`360^\circ` 
+(which wraps to :math:`0^\circ`). In `skyplot` we transform the :math:`180^\circ` to :math:`360^\circ` 
+range as :math:`{\rm longtude} - 360^\circ`. This is more suitable for passing arguments to the
+`extent` kwargs.
