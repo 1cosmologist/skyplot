@@ -53,13 +53,13 @@ For the test and documentation dependencies, install the optional extras:
 Longitude convention
 --------------------
 
-Important: `longitude` increases from :math:`-180^\circ` to :math:`180^\circ` from *left to right* 
+Important: Longitude increases from :math:`-180^\circ` to :math:`180^\circ` from *left to right* 
 to keep the astro convention used in CMB map plots. :math:`({\rm lon}=0^\circ, {\rm lat}=0^\circ)` 
 is the center of any map by default. With astro convention, the logitude increases to the left till 
 :math:`180^\circ` and then wraps around increasing from :math:`180^\circ` to :math:`360^\circ` 
-(which wraps to :math:`0^\circ`). In `skyplot` we transform the :math:`180^\circ` to :math:`360^\circ` 
+(which wraps to :math:`0^\circ`). In ``skyplot`` we transform the :math:`180^\circ` to :math:`360^\circ` 
 range as :math:`{\rm longtude} - 360^\circ`. This is more suitable for passing arguments to the
-`extent` kwargs.
+``extent`` kwargs.
 
 .. toctree::
    :maxdepth: 2
