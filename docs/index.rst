@@ -24,8 +24,8 @@ Features
 Installation
 ------------
 
-Install from conda-forge (recommended). This installs SkyPlot and its dependencies
- in a compatible environment.
+Install from conda-forge (recommended). This installs SkyPlot and its dependencies 
+in a compatible environment.
 
 .. code-block:: console
 
