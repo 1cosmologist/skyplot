@@ -87,7 +87,11 @@ def _get_last_figure() -> Figure | None:
     return _last_figure
 
 
-def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]:
+def _get_display_grid(
+    n_theta: int,
+    n_phi: int,
+    extent: tuple[float, float, float, float] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """Return an astronomy-oriented longitude/latitude display grid.
 
     Parameters
@@ -96,6 +100,9 @@ def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]
         Required colatitude grid size.
     n_phi : int
         Required longitude grid size.
+    extent : tuple[float, float, float, float] or None, optional
+        Local ``(lon_min, lon_max, lat_min, lat_max)`` bounds. When supplied,
+        the same grid dimensions are sampled within those bounds.
 
     Returns
     -------
@@ -103,6 +110,12 @@ def _get_display_grid(n_theta: int, n_phi: int) -> tuple[np.ndarray, np.ndarray]
         ``(longitude_deg, latitude_deg)`` arrays in the exact order used for
         Cartopy rendering.
     """
+    if extent is not None and extent != (-180.0, 180.0, -90.0, 90.0):
+        lon_min, lon_max, lat_min, lat_max = extent
+        lon_values = np.linspace(lon_min, lon_max, n_phi)
+        lat_values = np.linspace(lat_min, lat_max, n_theta)
+        return np.meshgrid(lon_values, lat_values)
+
     theta, phi = make_theta_phi_grid(n_theta=n_theta, n_phi=n_phi)
     lon = np.degrees(phi)
     lon = ((lon + 180.0) % 360.0) - 180.0
@@ -139,18 +152,36 @@ def _font_size_for_resolution(resolution: Literal["low", "medium", "high"] | Non
     return FONT_SIZE_PRESETS["medium" if resolution is None else resolution]
 
 
-def _validate_extent(extent: Sequence[float] | None) -> tuple[float, float, float, float] | None:
-    """Validate geographic extent as ``(lon_min, lon_max, lat_min, lat_max)``."""
+def _validate_extent(
+    extent: Sequence[float] | Literal["auto"] | None,
+) -> tuple[float, float, float, float] | Literal["auto"] | None:
+    """Validate geographic extent or return the ``"auto"`` sentinel."""
     if extent is None:
         return None
-    if isinstance(extent, (str, bytes)):
-        raise ValueError("extent must be a 4-element sequence: (lon_min, lon_max, lat_min, lat_max).")
+    if isinstance(extent, str):
+        if extent == "auto":
+            return "auto"
+        raise ValueError(
+            "extent must be 'auto' or a 4-element sequence: "
+            "(lon_min, lon_max, lat_min, lat_max)."
+        )
+    if isinstance(extent, bytes):
+        raise ValueError(
+            "extent must be 'auto' or a 4-element sequence: "
+            "(lon_min, lon_max, lat_min, lat_max)."
+        )
     try:
         n_items = len(extent)
     except TypeError as exc:
-        raise ValueError("extent must be a 4-element sequence: (lon_min, lon_max, lat_min, lat_max).") from exc
+        raise ValueError(
+            "extent must be 'auto' or a 4-element sequence: "
+            "(lon_min, lon_max, lat_min, lat_max)."
+        ) from exc
     if n_items != 4:
-        raise ValueError("extent must be a 4-element sequence: (lon_min, lon_max, lat_min, lat_max).")
+        raise ValueError(
+            "extent must be 'auto' or a 4-element sequence: "
+            "(lon_min, lon_max, lat_min, lat_max)."
+        )
 
     lon_min, lon_max, lat_min, lat_max = map(float, extent)
     if not np.isfinite([lon_min, lon_max, lat_min, lat_max]).all():
@@ -195,6 +226,107 @@ def _resolve_input_map_and_wcs(
             "2D map input requires WCS metadata via `wcs=` or a `.wcs` attribute on the input object."
         )
     return data_arr, resolved_wcs
+
+
+def _resolve_wcs_extent(
+    data: np.ndarray,
+    *,
+    wcs: Any,
+    world_axis_mapping: Sequence[int] | None,
+    coordinate_transform: Sequence[str] | None,
+) -> tuple[float, float, float, float] | None:
+    """Infer a geographic extent from the finite WCS image footprint."""
+    if not hasattr(wcs, "all_pix2world"):
+        return None
+
+    lon_axis, lat_axis = _resolve_wcs_world_axis_mapping(wcs, world_axis_mapping)
+    world_n_dim = getattr(wcs, "world_n_dim", None)
+    if world_n_dim is None:
+        world_n_dim = getattr(getattr(wcs, "wcs", None), "naxis", 2)
+    pixel_x_axis, pixel_y_axis = _resolve_wcs_pixel_axis_mapping(
+        wcs, lon_axis=lon_axis, lat_axis=lat_axis
+    )
+    oriented_data = _orient_wcs_slice_data(
+        np.asarray(data), wcs=wcs,
+        pixel_x_axis=pixel_x_axis, pixel_y_axis=pixel_y_axis,
+    )
+    nrows, ncols = oriented_data.shape
+
+    pixel_n_dim = getattr(wcs, "pixel_n_dim", None)
+    if pixel_n_dim is None:
+        pixel_n_dim = getattr(getattr(wcs, "wcs", None), "naxis", 2)
+    pixel_n_dim = int(pixel_n_dim)
+    pixel_reference = np.zeros(pixel_n_dim, dtype=float)
+    crpix = getattr(getattr(wcs, "wcs", None), "crpix", None)
+    if crpix is None:
+        crpix = getattr(wcs, "crpix", None)
+    if crpix is not None:
+        crpix_values = np.asarray(crpix, dtype=float).reshape(-1)
+        pixel_reference[: min(pixel_n_dim, crpix_values.size)] = (
+            crpix_values[:pixel_n_dim] - 1.0
+        )
+
+    x_values = np.linspace(-0.5, ncols - 0.5, max(2, min(ncols + 1, 128)))
+    y_values = np.linspace(-0.5, nrows - 0.5, max(2, min(nrows + 1, 128)))
+    edge_x = np.concatenate((x_values, x_values))
+    edge_y = np.concatenate((
+        np.full(x_values.size, -0.5),
+        np.full(x_values.size, nrows - 0.5),
+    ))
+    side_x = np.concatenate((
+        np.full(y_values.size, -0.5),
+        np.full(y_values.size, ncols - 0.5),
+    ))
+    side_y = np.concatenate((y_values, y_values))
+    pixel = np.broadcast_to(pixel_reference, (edge_x.size + side_x.size, pixel_n_dim)).copy()
+    pixel[:edge_x.size, pixel_x_axis] = edge_x
+    pixel[:edge_x.size, pixel_y_axis] = edge_y
+    pixel[edge_x.size:, pixel_x_axis] = side_x
+    pixel[edge_x.size:, pixel_y_axis] = side_y
+
+    world_raw = wcs.all_pix2world(pixel, 0)
+    if isinstance(world_raw, tuple):
+        if len(world_raw) <= max(lon_axis, lat_axis):
+            raise ValueError("wcs.all_pix2world did not return the required world axes.")
+        longitude = np.asarray(world_raw[lon_axis], dtype=float).reshape(-1)
+        latitude = np.asarray(world_raw[lat_axis], dtype=float).reshape(-1)
+    else:
+        world = np.asarray(world_raw, dtype=float)
+        if world.ndim != 2 or world.shape[0] != pixel.shape[0] or world.shape[1] <= max(lon_axis, lat_axis):
+            raise ValueError(
+                "wcs.all_pix2world must return an array with the required world axes."
+            )
+        longitude = world[:, lon_axis]
+        latitude = world[:, lat_axis]
+
+    finite = np.isfinite(longitude) & np.isfinite(latitude)
+    if not np.any(finite):
+        raise ValueError("WCS image footprint does not contain finite longitude/latitude values.")
+    longitude = longitude[finite]
+    latitude = latitude[finite]
+    if coordinate_transform is not None:
+        longitude, latitude, _, _ = _transform_display_coordinates(
+            longitude, latitude,
+            coordinate_frame=None,
+            coordinate_transform=(coordinate_transform[1], coordinate_transform[0]),
+        )
+
+    longitude_mod = np.mod(longitude, 360.0)
+    sorted_longitude = np.sort(longitude_mod)
+    gaps = np.diff(np.concatenate((sorted_longitude, [sorted_longitude[0] + 360.0])))
+    largest_gap = int(np.argmax(gaps))
+    longitude_start = sorted_longitude[(largest_gap + 1) % sorted_longitude.size]
+    longitude_unwrapped = longitude_mod.copy()
+    longitude_unwrapped[longitude_unwrapped < longitude_start] += 360.0
+    longitude_min = float(np.min(longitude_unwrapped))
+    longitude_max = float(np.max(longitude_unwrapped))
+    longitude_center = 0.5 * (longitude_min + longitude_max)
+    longitude_shift = 360.0 * np.floor((longitude_center + 180.0) / 360.0)
+    longitude_min -= longitude_shift
+    longitude_max -= longitude_shift
+    if longitude_max - longitude_min >= 360.0 - 1e-8:
+        longitude_min, longitude_max = -180.0, 180.0
+    return longitude_min, longitude_max, float(np.min(latitude)), float(np.max(latitude))
 
 
 def _validate_binary_mask(mask: np.ndarray) -> None:
@@ -877,7 +1009,7 @@ def plot_with_projection(
     projection_name: str,
     projection_factory: Callable[..., Any],
     projection_kwargs: dict[str, Any] | None = None,
-    extent: Sequence[float] | None = None,
+    extent: Sequence[float] | Literal["auto"] | None = None,
     coordinate_frame: str | None = None,
     coordinate_transform: Sequence[str] | None = None,
     wcs: Any | None = None,
@@ -887,10 +1019,10 @@ def plot_with_projection(
     n_phi: int = 1440,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
-    badcolor: Any = "grey",
+    badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
@@ -927,8 +1059,13 @@ def plot_with_projection(
         Required callable that constructs the Cartopy CRS.
     projection_kwargs : dict or None, default=None
         CRS-constructor keyword arguments.
-    extent : sequence[float] or None, default=None
+    extent : sequence[float] or {"auto"} or None, default=None
         New-axes geographic extent as ``(lon_min, lon_max, lat_min, lat_max)``.
+        ``extent="auto"`` infers the WCS image footprint for a WCS-backed 2D
+        map and selects the global extent for a HEALPix map. ``None`` keeps
+        the default global view. For regional Plate Carrée and Equidistant
+        Conic views, the configured sampling grid is generated within the
+        selected extent.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -958,14 +1095,14 @@ def plot_with_projection(
         medium, or high, respectively.
     nest : bool, default=False
         Use HEALPix NEST ordering.
-    interpolate : bool, default=True
-        Interpolate samples.
+    interpolate : bool, default=False
+        Interpolate samples instead of using nearest-pixel lookup.
     cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
-    badcolor : color, default="grey"
-        Missing-data color.
+    badcolor : color or None, default=None
+        Missing-data color. ``None`` makes missing samples transparent.
     vmin : float or None, default=None
         Lower color-scale limit.
     vmax : float or None, default=None
@@ -1050,6 +1187,24 @@ def plot_with_projection(
         show_gridlines = False
     else:
         data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
+        if validated_extent == "auto" and ax is None:
+            if resolved_wcs is None:
+                validated_extent = (-180.0, 180.0, -90.0, 90.0)
+            else:
+                validated_extent = _resolve_wcs_extent(
+                    data_arr,
+                    wcs=resolved_wcs,
+                    world_axis_mapping=world_axis_mapping,
+                    coordinate_transform=coordinate_transform,
+                )
+                if validated_extent is None:
+                    raise ValueError(
+                        "extent='auto' requires a WCS with all_pix2world(...)."
+                    )
+    if projection_name == "equidistantconic" and validated_extent is not None:
+        lon_min, lon_max, lat_min, lat_max = validated_extent
+        projection_kwargs.setdefault("central_longitude", 0.5 * (lon_min + lon_max))
+        projection_kwargs.setdefault("central_latitude", 0.5 * (lat_min + lat_max))
     if is_overlay_mask:
         _validate_binary_mask(data_arr)
         interpolate = False
@@ -1070,7 +1225,13 @@ def plot_with_projection(
         (0.0, 0.0, 0.0, 0.0) if is_overlay_mask else badcolor,
     )
 
-    lon, lat = _get_display_grid(n_theta=n_theta, n_phi=n_phi)
+    display_extent = None
+    if projection_name in {"platecarree", "equidistantconic"}:
+        if isinstance(validated_extent, tuple):
+            display_extent = validated_extent
+    lon, lat = _get_display_grid(
+        n_theta=n_theta, n_phi=n_phi, extent=display_extent,
+    )
     source_lon, source_lat, source_frame_label, display_frame_label = _transform_display_coordinates(
         lon,
         lat,

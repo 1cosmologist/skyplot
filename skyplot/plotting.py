@@ -162,10 +162,10 @@ def mollweide(
     n_phi: int = 1440,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
-    badcolor: Any = "grey",
+    badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
@@ -214,14 +214,15 @@ def mollweide(
         new figure for low, medium, or high.
     nest : bool, default=False
         Treat a 1D HEALPix map as NEST ordered.
-    interpolate : bool, default=True
-        Interpolate sampled values instead of nearest-pixel lookup.
+    interpolate : bool, default=False
+        Interpolate sampled values instead of using nearest-pixel lookup.
     cmap : str or sequence, default="roma_r"
         Matplotlib or ``colormaps`` colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Input sentinel converted to missing data; ``None`` disables sentinel matching.
-    badcolor : color, default="grey"
-        Color for missing, non-finite, or sentinel samples.
+    badcolor : color or None, default=None
+        Color for missing, non-finite, or sentinel samples. ``None`` makes
+        missing samples transparent.
     vmin, vmax : float or None, defaults=None, None
         Optional lower and upper color-scale limits.
     norm : str or matplotlib.colors.Normalize or None, default=None
@@ -290,10 +291,10 @@ def orthographic(
     n_phi: int = 1440,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
-    badcolor: Any = "grey",
+    badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
@@ -340,14 +341,14 @@ def orthographic(
         medium, or high, respectively.
     nest : bool, default=False
         Use HEALPix NEST ordering for a 1D map.
-    interpolate : bool, default=True
-        Interpolate sampled map values.
+    interpolate : bool, default=False
+        Interpolate sampled map values instead of using nearest-pixel lookup.
     cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables sentinel matching.
-    badcolor : color, default="grey"
-        Missing-data color.
+    badcolor : color or None, default=None
+        Missing-data color. ``None`` makes missing samples transparent.
     vmin, vmax : float or None, defaults=None, None
         Optional color-scale limits.
     norm : str or Normalize or None, default=None
@@ -405,7 +406,7 @@ def platecarree(
     map_data: Any,
     *,
     projection_kwargs: dict[str, Any] | None = None,
-    extent: Sequence[float] | None = None,
+    extent: Sequence[float] | Literal["auto"] | None = None,
     coordinate_frame: str | None = None,
     coordinate_transform: Sequence[str] | None = None,
     wcs: Any | None = None,
@@ -415,10 +416,10 @@ def platecarree(
     n_phi: int = 1440,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
-    badcolor: Any = "grey",
+    badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
@@ -445,8 +446,11 @@ def platecarree(
         two-element ``(U, V)`` sequence of matching component maps.
     projection_kwargs : dict or None, default=None
         Keyword arguments for Cartopy's ``PlateCarree`` CRS.
-    extent : sequence[float] or None, default=None
+    extent : sequence[float] or {"auto"} or None, default=None
         ``(lon_min, lon_max, lat_min, lat_max)`` in degrees for new axes;
+        ``extent="auto"`` infers the WCS image footprint for WCS-backed maps
+        and selects the global extent for HEALPix maps. ``None`` keeps the
+        default global view. Regional extents also define the sampling domain;
         an existing ``ax`` retains its own extent.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
@@ -467,14 +471,14 @@ def platecarree(
         medium, or high, respectively; also selects 120, 200, or 300 DPI.
     nest : bool, default=False
         Use HEALPix NEST ordering.
-    interpolate : bool, default=True
-        Interpolate samples.
+    interpolate : bool, default=False
+        Interpolate samples instead of using nearest-pixel lookup.
     cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
-    badcolor : color, default="grey"
-        Missing-data color.
+    badcolor : color or None, default=None
+        Missing-data color. ``None`` makes missing samples transparent.
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None
@@ -534,7 +538,7 @@ def equidistantconic(
     map_data: Any,
     *,
     projection_kwargs: dict[str, Any] | None = None,
-    extent: Sequence[float] | None = None,
+    extent: Sequence[float] | Literal["auto"] | None = None,
     coordinate_frame: str | None = None,
     coordinate_transform: Sequence[str] | None = None,
     wcs: Any | None = None,
@@ -544,10 +548,10 @@ def equidistantconic(
     n_phi: int = 1440,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
-    badcolor: Any = "grey",
+    badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
@@ -574,8 +578,11 @@ def equidistantconic(
         two-element ``(U, V)`` sequence of matching component maps.
     projection_kwargs : dict or None, default=None
         Cartopy ``EquidistantConic`` options; ``cutoff`` is unsupported.
-    extent : sequence[float] or None, default=None
+    extent : sequence[float] or {"auto"} or None, default=None
         Geographic bounds for new axes and default projection-center inference.
+        ``extent="auto"`` infers the WCS image footprint for WCS-backed maps
+        and selects the global extent for HEALPix maps. ``None`` keeps the
+        default global view. Regional extents also define the sampling domain.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -595,14 +602,14 @@ def equidistantconic(
         medium, or high, respectively; also selects 120, 200, or 300 DPI.
     nest : bool, default=False
         Use HEALPix NEST ordering.
-    interpolate : bool, default=True
-        Interpolate samples.
+    interpolate : bool, default=False
+        Interpolate samples instead of using nearest-pixel lookup.
     cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
-    badcolor : color, default="grey"
-        Missing-data color.
+    badcolor : color or None, default=None
+        Missing-data color. ``None`` makes missing samples transparent.
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None
@@ -646,7 +653,7 @@ def equidistantconic(
             "Cartopy's EquidistantConic CRS does not support 'cutoff'. "
             "Use extent=(lon_min, lon_max, lat_min, lat_max) instead."
         )
-    if validated_extent is not None:
+    if isinstance(validated_extent, tuple):
         lon_min, lon_max, lat_min, lat_max = validated_extent
         resolved_projection_kwargs.setdefault("central_longitude", 0.5 * (lon_min + lon_max))
         resolved_projection_kwargs.setdefault("central_latitude", 0.5 * (lat_min + lat_max))
@@ -685,10 +692,10 @@ def gnomonic(
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     cmap: str | Sequence[Any] = "roma_r",
     badvalue: float | None = hp.UNSEEN,
-    badcolor: Any = "grey",
+    badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
@@ -731,14 +738,14 @@ def gnomonic(
         requires axes from a prior magnitude-map rendering.
     nest : bool, default=False
         Use HEALPix NEST ordering.
-    interpolate : bool, default=True
-        Interpolate sampled values.
+    interpolate : bool, default=False
+        Interpolate sampled values instead of using nearest-pixel lookup.
     cmap : str or sequence, default="roma_r"
         Colormap specification.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
-    badcolor : color, default="grey"
-        Missing-data color.
+    badcolor : color or None, default=None
+        Missing-data color. ``None`` makes missing samples transparent.
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None

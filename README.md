@@ -65,6 +65,14 @@ For the Planck-style symmetric asinh/logarithmic scaling, pass
 explicit limits for a fixed shared scale. Use `linthresh=` to adjust the
 linear-region scale around zero.
 
+Plotting uses nearest-pixel sampling by default (`interpolate=False`) and
+makes missing, non-finite, or sentinel-valued samples transparent
+(`badcolor=None`). Pass `interpolate=True` or a color such as `badcolor="grey"`
+when a different rendering is desired. For `platecarree` and `equidistantconic`,
+pass `extent="auto"` to infer WCS-map bounds; the same value selects the
+global extent for HEALPix maps. Omitting `extent` keeps the default global view.
+Regional extents also limit the geographic domain sampled by the grid.
+
 In a notebook, display a returned figure explicitly:
 
 ```python

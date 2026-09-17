@@ -43,6 +43,19 @@ normalization. It derives unset limits from the plotted map; pass explicit
 ``vmin`` and ``vmax`` when a fixed scale is needed. ``linthresh=10.0`` sets
 the scale of the linear region around zero and can be adjusted.
 
+Plotting uses nearest-pixel sampling by default (``interpolate=False``) and
+makes missing, non-finite, or sentinel-valued samples transparent
+(``badcolor=None``). Pass ``interpolate=True`` or a color such as
+``badcolor="grey"`` when a different rendering is desired.
+
+For ``platecarree`` and ``equidistantconic``, pass ``extent="auto"`` to
+derive the geographic extent from a WCS-backed 2D map. For a HEALPix map,
+``extent="auto"`` selects the global extent. Omitting ``extent`` (or passing
+``None``) keeps the default global view; pass
+``extent=(lon_min, lon_max, lat_min, lat_max)`` for explicit bounds. For these
+regional projections, the selected extent also defines the geographic domain
+sampled by the configured grid.
+
 Load a 1D HEALPix FITS map by setting ``map_path`` to a local file. The map
 must contain the field selected by ``field``; the notebook uses the first
 field, ``field=0``.

@@ -4,6 +4,13 @@ SkyPlot Documentation
 ``skyplot`` is a visualization library for CMB and other astrophysical sky maps 
 and aims to make figures optimized for publications and presentations easier.
 
+.. admonition:: Latest version
+   :class: version-highlight
+
+   .. image:: https://img.shields.io/github/v/release/1cosmologist/skyplot?sort=semver&label=latest%20GitHub%20version
+      :target: https://github.com/1cosmologist/skyplot/releases/latest
+      :alt: Latest SkyPlot version on GitHub
+
 Features
 --------
 

@@ -52,6 +52,30 @@ class _LinearDummyWCS:
         return np.column_stack([x, y])
 
 
+class _FootprintWCS:
+    """WCS-like object with a compact, known image footprint."""
+
+    world_axis_physical_types = ("pos.eq.ra", "pos.eq.dec")
+
+    def __init__(self, nrows: int, ncols: int) -> None:
+        self.nrows = nrows
+        self.ncols = ncols
+        self.last_world = None
+
+    def all_world2pix(self, world, origin):
+        arr = np.asarray(world, dtype=float)
+        self.last_world = arr
+        x = (arr[:, 0] - 10.0) * self.ncols / 20.0 - 0.5
+        y = (arr[:, 1] + 20.0) * self.nrows / 20.0 - 0.5
+        return np.column_stack([x, y])
+
+    def all_pix2world(self, pixel, origin):
+        arr = np.asarray(pixel, dtype=float)
+        lon = 10.0 + (arr[:, 0] + 0.5) * 20.0 / self.ncols
+        lat = -20.0 + (arr[:, 1] + 0.5) * 20.0 / self.nrows
+        return np.column_stack([lon, lat])
+
+
 class _ReversedWorldAxisWCS:
     """Test WCS whose native world order is (Dec, RA)."""
 
@@ -390,6 +414,97 @@ def test_projection_plotter_accepts_2d_wcs_data() -> None:
     assert isinstance(fig, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["shape"] == [12, 24]
+
+
+def test_platecarree_infers_extent_from_wcs_footprint() -> None:
+    data = np.ones((8, 12))
+    fig = platecarree(
+        data,
+        wcs=_FootprintWCS(nrows=8, ncols=12),
+        extent="auto",
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    payload = getattr(fig, "_skyplot_payload")
+    assert payload["extent"] == pytest.approx([10.0, 30.0, -20.0, 0.0])
+    assert fig.axes[0].get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
+        [10.0, 30.0, -20.0, 0.0]
+    )
+
+
+def test_equidistantconic_infers_extent_and_projection_center_from_wcs() -> None:
+    data = np.ones((8, 12))
+    fig = equidistantconic(
+        data,
+        wcs=_FootprintWCS(nrows=8, ncols=12),
+        extent="auto",
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    payload = getattr(fig, "_skyplot_payload")
+    assert payload["extent"] == pytest.approx([10.0, 30.0, -20.0, 0.0])
+    assert payload["projection_kwargs"]["central_longitude"] == pytest.approx(20.0)
+    assert payload["projection_kwargs"]["central_latitude"] == pytest.approx(-10.0)
+
+
+def test_extent_none_keeps_wcs_map_global() -> None:
+    data = np.ones((8, 12))
+    fig = platecarree(
+        data,
+        wcs=_FootprintWCS(nrows=8, ncols=12),
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    payload = getattr(fig, "_skyplot_payload")
+    assert payload["extent"] == pytest.approx([-180.0, 180.0, -90.0, 90.0])
+
+
+def test_extent_auto_uses_global_extent_for_healpix_map() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = platecarree(
+        hp_map,
+        extent="auto",
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    payload = getattr(fig, "_skyplot_payload")
+    assert payload["extent"] == pytest.approx([-180.0, 180.0, -90.0, 90.0])
+
+
+def test_local_extent_samples_wcs_map_on_local_grid() -> None:
+    data = np.ones((8, 12))
+    wcs = _FootprintWCS(nrows=8, ncols=12)
+    n_theta, n_phi = 5, 7
+
+    platecarree(
+        data,
+        wcs=wcs,
+        extent=(12.0, 28.0, -18.0, -2.0),
+        n_theta=n_theta,
+        n_phi=n_phi,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    assert wcs.last_world is not None
+    sampled_world = wcs.last_world[: n_theta * n_phi]
+    assert sampled_world.shape == (n_theta * n_phi, 2)
+    assert sampled_world[:, 0].min() == pytest.approx(12.0)
+    assert sampled_world[:, 0].max() == pytest.approx(28.0)
+    assert sampled_world[:, 1].min() == pytest.approx(-18.0)
+    assert sampled_world[:, 1].max() == pytest.approx(-2.0)
 
 
 def test_mollweide_rotated_central_longitude_keeps_all_map_samples() -> None:

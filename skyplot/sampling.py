@@ -89,7 +89,7 @@ def sample_at_angles(
     *,
     nest: bool = False,
     lonlat: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     badvalue: float | None = hp.UNSEEN,
 ) -> np.ndarray:
     """Sample a HEALPix map at supplied angular coordinates.
@@ -111,7 +111,7 @@ def sample_at_angles(
         ``True``. Default is ``False``.
     interpolate : bool, optional
         Use bilinear interpolation when ``True``. Use nearest-pixel sampling
-        when ``False``. Default is ``True``.
+        when ``False``. Default is ``False``.
     badvalue : float or None, optional
         Input sentinel value treated as missing data. Defaults to
         ``healpy.UNSEEN``. NaN values are always treated as missing.
@@ -249,7 +249,7 @@ def sample_full_sky(
     n_theta: int = 240,
     n_phi: int = 480,
     nest: bool = False,
-    interpolate: bool = True,
+    interpolate: bool = False,
     badvalue: float | None = hp.UNSEEN,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sample an input HEALPix map on a regular full-sky grid.
