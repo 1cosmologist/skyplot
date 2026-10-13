@@ -89,6 +89,9 @@ Each plotting function accepts `plot_mode`. Use the ordinary `"map"` mode for
 a scalar map, `"overlay_mask"` for a binary mask, and `"vector_field"` for a
 transparent streamplot or quiver layer. Render the scalar magnitude first;
 then pass its Cartopy axes to the overlay call.
+For a translucent scalar overlay, use another `"map"` call with `ax=` and
+`alpha=`. Mollweide overlays are warped as one image so their opacity stays
+uniform across the projection.
 The `alpha` argument controls opacity in every mode; its default is `None`,
 except mask overlays use `0.25` when omitted.
 

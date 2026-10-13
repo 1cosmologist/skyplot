@@ -5,6 +5,7 @@ import types
 import healpy as hp
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 import numpy as np
 import pytest
 from astropy.wcs import WCS
@@ -586,6 +587,35 @@ def test_map_alpha_is_passed_to_pcolormesh() -> None:
 
     fig = mollweide(hp_map, pcolormesh_kwargs={"alpha": 0.8}, **options)
     assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(0.8)
+
+
+@pytest.mark.parametrize("alpha_kwargs", [{"alpha": 0.03}, {"pcolormesh_kwargs": {"alpha": 0.03}}])
+def test_translucent_mollweide_overlay_preserves_base_map(alpha_kwargs) -> None:
+    size = hp.nside2npix(4)
+    pol_map = np.linspace(0.0, 3000.0, size)
+    lic_map = np.linspace(0.0, 1.0, size)
+    options = {
+        "n_theta": 48, "n_phi": 96, "figsize": (4.0, 3.0), "dpi": 80,
+        "show_gridlines": False, "add_colorbar": False,
+    }
+    fig = mollweide(
+        pol_map, cmap="sunburst",
+        norm=SymLogNorm(linthresh=10.0, vmin=0.0, vmax=3000.0),
+        zorder=1, **options,
+    )
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    before = np.asarray(canvas.buffer_rgba()).copy()
+
+    ax = fig.axes[0]
+    mollweide(lic_map, ax=ax, cmap="gray", zorder=3, **alpha_kwargs, **options)
+    canvas.draw()
+    after = np.asarray(canvas.buffer_rgba())
+
+    center = (before.shape[0] // 2, before.shape[1] // 2)
+    difference = np.abs(after[center][:3].astype(int) - before[center][:3].astype(int))
+    assert difference.max() <= 10
+    assert ax.images[-1].get_alpha() == pytest.approx(0.03)
 
 
 def test_overlay_mask_draws_only_invalid_pixels() -> None:

@@ -1363,14 +1363,20 @@ def plot_with_projection(
         mesh_cmap = resolved_cmap.copy()
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
+    translucent_mollweide_overlay = (
+        projection_name == "mollweide"
+        and not created_fig
+        and isinstance(mesh_kwargs["alpha"], (int, float, np.floating))
+        and 0.0 < mesh_kwargs["alpha"] < 1.0
+        and (pcolormesh_kwargs is None or pcolormesh_kwargs.keys() <= {"alpha"})
+    )
     quad = None
-    if is_overlay_mask:
+    if is_overlay_mask or translucent_mollweide_overlay:
         # A transparent projected QuadMesh can be split into overlapping
         # polygons by Cartopy. Its semi-transparent edges then accumulate
-        # unevenly, producing a fine dotted/ripple pattern in otherwise
-        # uniform masked regions (most visibly in full-sky and conic views).
+        # unevenly, obscuring the map beneath a translucent overlay.
         # Let Cartopy warp one raster instead: it is composited once and
-        # keeps the zero-valued mask region visually uniform.
+        # keeps mask regions and translucent map layers visually uniform.
         #
         # ``values`` is on an ascending latitude/longitude centre grid, so
         # these are its pixel boundaries rather than its centre coordinates.
@@ -1387,12 +1393,11 @@ def plot_with_projection(
             vmin=vmin,
             vmax=vmax,
             norm=norm,
-            alpha=alpha,
+            alpha=alpha if is_overlay_mask else mesh_kwargs["alpha"],
             zorder=zorder,
         )
     elif not vector_field:
         
-        print(mesh_kwargs)
         quad = ax.pcolormesh(
             lon,
             lat,
