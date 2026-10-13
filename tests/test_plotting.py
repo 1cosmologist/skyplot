@@ -577,6 +577,17 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
     assert len(fig.axes) == 2
 
 
+def test_map_alpha_is_passed_to_pcolormesh() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
+
+    fig = mollweide(hp_map, alpha=0.35, pcolormesh_kwargs={"alpha": 0.8}, **options)
+    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(0.35)
+
+    fig = mollweide(hp_map, pcolormesh_kwargs={"alpha": 0.8}, **options)
+    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(0.8)
+
+
 def test_overlay_mask_draws_only_invalid_pixels() -> None:
     hp_map = np.ones(hp.nside2npix(2))
     allowed_mask = np.ones_like(hp_map, dtype=bool)

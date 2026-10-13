@@ -1344,6 +1344,8 @@ def plot_with_projection(
     }
     if pcolormesh_kwargs is not None:
         mesh_kwargs.update(pcolormesh_kwargs)
+    if alpha is not None:
+        mesh_kwargs["alpha"] = alpha
     # The public zorder argument is authoritative and must not be passed
     # twice when legacy pcolormesh_kwargs also contains ``zorder``.
     mesh_kwargs.pop("zorder", None)
