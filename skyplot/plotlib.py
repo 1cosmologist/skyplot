@@ -30,8 +30,9 @@ from typing import Any, Callable, Literal, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
-from matplotlib.colors import Colormap, ListedColormap, Normalize
+from matplotlib.colors import Colormap, ListedColormap, Normalize, SymLogNorm
 from matplotlib.figure import Figure
+from matplotlib.scale import SymmetricalLogScale
 
 from importlib import resources
 
@@ -1006,6 +1007,29 @@ def _draw_vector_field(
         )
     return method
 
+
+def _set_colorbar_ticks(colorbar: Any) -> None:
+    """Label color limits and, for symmetric log scales, linear boundaries."""
+    vmin, vmax = float(colorbar.vmin), float(colorbar.vmax)
+    ticks = np.asarray(colorbar.get_ticks(), dtype=float)
+    ticks = ticks[np.isfinite(ticks) & (ticks >= vmin) & (ticks <= vmax)]
+    required = [vmin, vmax]
+
+    norm = colorbar.norm
+    if isinstance(norm, SymLogNorm):
+        linthresh = norm.linthresh
+    elif isinstance(getattr(norm, "_scale", None), SymmetricalLogScale):
+        linthresh = norm._scale.linthresh
+    else:
+        linthresh = getattr(norm, "_skyplot_linthresh", None)
+    if linthresh is not None:
+        required.extend((-linthresh, linthresh))
+
+    ticks = np.unique(np.concatenate((ticks, required)))
+    ticks = ticks[(ticks >= vmin) & (ticks <= vmax)]
+    colorbar.set_ticks(ticks, labels=[f"{tick:g}" for tick in ticks])
+
+
 def plot_with_projection(
     map_data: Any,
     *,
@@ -1396,6 +1420,7 @@ def plot_with_projection(
             aspect=40,
         )
         cbar.set_label(colorbar_title, fontsize=font_size)
+        _set_colorbar_ticks(cbar)
         cbar.ax.tick_params(labelsize=0.85 * font_size)
 
     if title:

@@ -50,9 +50,11 @@ def PlanckLogNorm(
             np.asarray(values, dtype=float) * _LN10
         )
 
-    return mcolors.FuncNorm(
+    norm = mcolors.FuncNorm(
         (symlog_forward, symlog_backward), vmin=vmin, vmax=vmax
     )
+    norm._skyplot_linthresh = linthresh
+    return norm
 
 
 __all__ = ["PlanckLogNorm"]

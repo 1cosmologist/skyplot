@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from astropy.wcs import WCS
-from matplotlib.colors import to_rgba
+from matplotlib.colors import SymLogNorm, to_rgba
 import skyplot.plotlib as plotlib
 import skyplot.plotting as plotting
+from skyplot.normalization import PlanckLogNorm
 
 matplotlib.use("Agg")
 pytest.importorskip("cartopy")
@@ -765,6 +766,42 @@ def test_top_level_alpha_applies_to_vector_artists(plotter, method: str) -> None
     if method == "streamplot":
         assert ax.patches[patch_count:]
         assert all(arrow.get_alpha() == pytest.approx(0.35) for arrow in ax.patches[patch_count:])
+
+
+@pytest.mark.parametrize("plotter", [mollweide, gnomonic])
+@pytest.mark.parametrize("norm_kind", ["linear", "symlog", "planck", "string_symlog"])
+def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> None:
+    hp_map = np.linspace(-100.0, 100.0, hp.nside2npix(2))
+    options = {"n_theta": 12, "n_phi": 24, "show_gridlines": False}
+    if norm_kind == "symlog":
+        options["norm"] = SymLogNorm(linthresh=5.0, vmin=-100.0, vmax=100.0)
+        threshold = 5.0
+    elif norm_kind == "planck":
+        options["norm"] = PlanckLogNorm(linthresh=7.0, vmin=-100.0, vmax=100.0)
+        threshold = 7.0
+    elif norm_kind == "string_symlog":
+        options.update(norm="symlog", vmin=-100.0, vmax=100.0)
+        threshold = None
+    else:
+        options.update(vmin=-100.0, vmax=100.0)
+        threshold = None
+
+    fig = plotter(hp_map, **options)
+    if norm_kind == "string_symlog":
+        artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+        threshold = artist.norm._scale.linthresh
+    expected = [-100.0, 100.0]
+    if threshold is not None:
+        expected.extend((-threshold, threshold))
+
+    colorbar_ax = fig.axes[-1]
+    fig.canvas.draw()
+    ticks = colorbar_ax.get_xticks()
+    labels = [label.get_text().replace("−", "-") for label in colorbar_ax.get_xticklabels()]
+    for value in expected:
+        matches = np.flatnonzero(np.isclose(ticks, value))
+        assert len(matches) == 1
+        assert labels[matches[0]] == f"{value:g}"
 
 
 def test_plot_modes_have_layered_zorders_and_accept_an_override() -> None:

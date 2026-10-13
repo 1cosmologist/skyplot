@@ -919,6 +919,7 @@ def gnomonic(
         assert image is not None
         colorbar = fig.colorbar(image, ax=ax, orientation="horizontal", pad=0.08, fraction=0.05, aspect=40)
         colorbar.set_label(colorbar_title)
+        _plotlib._set_colorbar_ticks(colorbar)
     if title:
         ax.set_title(title)
     fig.tight_layout()
