@@ -962,6 +962,7 @@ def _draw_vector_field(
     vector_kwargs: dict[str, Any] | None, n_theta: int, n_phi: int,
     figsize: tuple[float, float], resolution: Literal["low", "medium", "high"] | None,
     transform: Any | None = None, zorder: float = 2.0,
+    alpha: float | None = None,
     force_zorder: bool = False,
 ) -> str:
     """Draw a streamplot or quiver layer and return the selected method."""
@@ -977,6 +978,8 @@ def _draw_vector_field(
         resolution=resolution,
     )
     defaults.update(options)
+    if alpha is not None:
+        defaults["alpha"] = alpha
     if force_zorder or "zorder" not in defaults:
         defaults["zorder"] = zorder
     call_transform = {} if transform is None else {"transform": transform}
@@ -1214,8 +1217,6 @@ def plot_with_projection(
         vmax = None
         alpha = 0.25 if alpha is None else alpha
         cmap = ListedColormap([overlay_color])
-    elif alpha is None:
-        alpha = 1.0
     zorder_is_explicit = zorder is not None
     if zorder is None:
         zorder = 3.0 if is_overlay_mask else 2.0 if vector_field else 1.0
@@ -1380,7 +1381,7 @@ def plot_with_projection(
             ax, lon=lon, lat=lat, u=u_values, v=v_values,
             vector_kwargs=vector_kwargs, n_theta=n_theta, n_phi=n_phi,
             figsize=tuple(fig.get_size_inches()), resolution=resolution,
-            transform=ccrs.PlateCarree(), zorder=zorder,
+            transform=ccrs.PlateCarree(), zorder=zorder, alpha=alpha,
             force_zorder=zorder_is_explicit,
         )
 

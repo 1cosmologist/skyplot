@@ -87,6 +87,8 @@ Each plotting function accepts `plot_mode`. Use the ordinary `"map"` mode for
 a scalar map, `"overlay_mask"` for a binary mask, and `"vector_field"` for a
 transparent streamplot or quiver layer. Render the scalar magnitude first;
 then pass its Cartopy axes to the overlay call.
+The `alpha` argument controls opacity in every mode; its default is `None`,
+except mask overlays use `0.25` when omitted.
 
 ```python
 P = np.hypot(q_map, u_map)

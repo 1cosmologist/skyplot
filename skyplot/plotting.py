@@ -33,7 +33,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
-from matplotlib.colors import Normalize
+from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.figure import Figure
 
 from . import plotlib as _plotlib
@@ -818,12 +818,10 @@ def gnomonic(
         data_arr, resolved_wcs = _resolve_input_map_and_wcs(map_data, wcs)
         if is_overlay_mask:
             _plotlib._validate_binary_mask(data_arr)
-            cmap = [overlay_color]
+            cmap = ListedColormap([overlay_color])
             vmin = vmax = None
             alpha = 0.25 if alpha is None else alpha
             add_colorbar = False
-    if alpha is None:
-        alpha = 1.0
     zorder_is_explicit = zorder is not None
     if zorder is None:
         zorder = 3.0 if is_overlay_mask else 2.0 if vector_field else 1.0
@@ -891,6 +889,7 @@ def gnomonic(
             lat=y_plane_grid * 180.0 / np.pi * 60.0, u=u_values, v=v_values,
             vector_kwargs=vector_kwargs, n_theta=ysize, n_phi=xsize,
             figsize=tuple(fig.get_size_inches()), resolution=None, zorder=zorder,
+            alpha=alpha,
             force_zorder=zorder_is_explicit,
         )
     if astro_orientation != ax.xaxis_inverted():

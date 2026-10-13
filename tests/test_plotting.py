@@ -619,7 +619,7 @@ def test_overlay_mask_draws_only_invalid_pixels() -> None:
     assert payload["vmax"] is None
 
 
-def test_equidistantconic_mask_overlay_uses_a_single_warped_image() -> None:
+def test_equidistantconic_overlay_mask_uses_a_single_warped_image() -> None:
     hp_map = np.ones(hp.nside2npix(2))
     mask = np.ones_like(hp_map, dtype=bool)
     mask[:12] = False
@@ -715,6 +715,56 @@ def test_streamplot_vector_alpha_is_applied_to_lines_and_arrows() -> None:
     assert vector_lines[0].get_alpha() == pytest.approx(0.35)
     assert ax.patches
     assert all(arrow.get_alpha() == pytest.approx(0.35) for arrow in ax.patches)
+
+
+@pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic, gnomonic])
+def test_plot_alpha_defaults_and_overlay_mask(plotter) -> None:
+    component = np.ones(hp.nside2npix(2))
+    mask = np.ones_like(component, dtype=bool)
+    mask[:4] = False
+    options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
+
+    fig = plotter(component, **options)
+    artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+    assert artist.get_alpha() is None
+    assert fig._skyplot_payload["alpha"] is None
+
+    fig = plotter(component, alpha=0.4, **options)
+    artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+    assert artist.get_alpha() == pytest.approx(0.4)
+
+    fig = plotter(mask, plot_mode="overlay_mask", **options)
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.25)
+    assert fig._skyplot_payload["plot_mode"] == "overlay_mask"
+
+    fig = plotter(mask, plot_mode="overlay_mask", alpha=0.6, **options)
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.6)
+
+    with pytest.raises(ValueError, match="plot_mode must be one of"):
+        plotter(mask, plot_mode="mask_overlay", **options)
+
+
+@pytest.mark.parametrize("plotter", [mollweide, gnomonic])
+@pytest.mark.parametrize("method", ["streamplot", "quiver"])
+def test_top_level_alpha_applies_to_vector_artists(plotter, method: str) -> None:
+    component = np.ones(hp.nside2npix(2))
+    options = {"n_theta": 12, "n_phi": 24, "show_gridlines": False, "add_colorbar": False}
+    fig = plotter(component, **options)
+    ax = fig.axes[0]
+    collection_count = len(ax.collections)
+    patch_count = len(ax.patches)
+
+    plotter(
+        (component, component), ax=ax, plot_mode="vector_field",
+        alpha=0.35, vector_kwargs={"method": method, "alpha": 0.1}, **options,
+    )
+
+    vector_artists = ax.collections[collection_count:]
+    assert len(vector_artists) == 1
+    assert vector_artists[0].get_alpha() == pytest.approx(0.35)
+    if method == "streamplot":
+        assert ax.patches[patch_count:]
+        assert all(arrow.get_alpha() == pytest.approx(0.35) for arrow in ax.patches[patch_count:])
 
 
 def test_plot_modes_have_layered_zorders_and_accept_an_override() -> None:
