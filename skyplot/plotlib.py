@@ -1391,6 +1391,8 @@ def plot_with_projection(
             zorder=zorder,
         )
     elif not vector_field:
+        
+        print(mesh_kwargs)
         quad = ax.pcolormesh(
             lon,
             lat,
