@@ -43,6 +43,10 @@ normalization. It derives unset limits from the plotted map; pass explicit
 ``vmin`` and ``vmax`` when a fixed scale is needed. ``linthresh=10.0`` sets
 the scale of the linear region around zero and can be adjusted.
 
+Colorbars label both displayed color limits. With ``SymLogNorm``,
+``norm="symlog"``, or ``PlanckLogNorm``, they also label the visible
+``-linthresh`` and ``+linthresh`` boundaries of the linear region.
+
 Plotting uses nearest-pixel sampling by default (``interpolate=False``) and
 makes missing, non-finite, or sentinel-valued samples transparent
 (``badcolor=None``). Pass ``interpolate=True`` or a color such as

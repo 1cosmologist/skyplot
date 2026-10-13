@@ -804,6 +804,19 @@ def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> No
         assert labels[matches[0]] == f"{value:g}"
 
 
+def test_planck_colorbar_marks_derived_limits() -> None:
+    hp_map = np.linspace(-100.0, 100.0, hp.nside2npix(2))
+    fig = mollweide(
+        hp_map, n_theta=12, n_phi=24, show_gridlines=False,
+        norm=PlanckLogNorm(linthresh=10.0),
+    )
+    artist = fig.axes[0].collections[-1]
+    ticks = fig.axes[-1].get_xticks()
+
+    for value in (artist.norm.vmin, -10.0, 10.0, artist.norm.vmax):
+        assert np.any(np.isclose(ticks, value))
+
+
 def test_plot_modes_have_layered_zorders_and_accept_an_override() -> None:
     component = np.ones(hp.nside2npix(2))
     mask = np.ones_like(component, dtype=bool)

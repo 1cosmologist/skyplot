@@ -64,6 +64,8 @@ For the Planck-style symmetric asinh/logarithmic scaling, pass
 `norm=PlanckLogNorm()`. Unset limits are derived from the plotted map; pass
 explicit limits for a fixed shared scale. Use `linthresh=` to adjust the
 linear-region scale around zero.
+Colorbars label both color limits. With symmetric log or `PlanckLogNorm`, they
+also label the visible boundaries of the linear region at `±linthresh`.
 
 Plotting uses nearest-pixel sampling by default (`interpolate=False`) and
 makes missing, non-finite, or sentinel-valued samples transparent

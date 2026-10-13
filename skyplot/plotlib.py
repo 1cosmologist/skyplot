@@ -1025,7 +1025,10 @@ def _set_colorbar_ticks(colorbar: Any) -> None:
     if linthresh is not None:
         required.extend((-linthresh, linthresh))
 
-    ticks = np.unique(np.concatenate((ticks, required)))
+    required_ticks = np.unique(required)
+    for value in required_ticks:
+        ticks = ticks[~np.isclose(ticks, value, rtol=1e-12, atol=0.0)]
+    ticks = np.sort(np.concatenate((ticks, required_ticks)))
     ticks = ticks[(ticks >= vmin) & (ticks <= vmax)]
     colorbar.set_ticks(ticks, labels=[f"{tick:g}" for tick in ticks])
 
