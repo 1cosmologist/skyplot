@@ -1165,7 +1165,10 @@ def plot_with_projection(
     gridline_kwargs : dict or None, default=None
         Gridline option overrides.
     pcolormesh_kwargs : dict or None, default=None
-        Extra mesh keyword arguments.
+        Extra mesh keyword arguments. With map opacity below 1, only
+        ``alpha``, ``rasterized``, and nearest or auto ``shading`` are used
+        because the map is rendered as one warped image. Set drawing order
+        with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options passed to the vector artist when ``plot_mode="vector_field"``.
         ``method`` selects ``"streamplot"`` (default) or ``"quiver"``.
@@ -1255,11 +1258,24 @@ def plot_with_projection(
 
     display_extent = None
     if projection_name in {"platecarree", "equidistantconic"}:
-        if isinstance(validated_extent, tuple):
+        if ax is not None:
+            display_extent = tuple(
+                float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
+            )
+        elif isinstance(validated_extent, tuple):
             display_extent = validated_extent
     lon, lat = _get_display_grid(
         n_theta=n_theta, n_phi=n_phi, extent=display_extent,
     )
+    raster_extent = (-180.0, 180.0, -90.0, 90.0)
+    if display_extent is not None and display_extent != raster_extent:
+        lon_min, lon_max, lat_min, lat_max = display_extent
+        lon_pad = (lon_max - lon_min) / (2 * (n_phi - 1)) if n_phi > 1 else 0.0
+        lat_pad = (lat_max - lat_min) / (2 * (n_theta - 1)) if n_theta > 1 else 0.0
+        raster_extent = (
+            lon_min - lon_pad, lon_max + lon_pad,
+            lat_min - lat_pad, lat_max + lat_pad,
+        )
     source_lon, source_lat, source_frame_label, display_frame_label = _transform_display_coordinates(
         lon,
         lat,
@@ -1363,32 +1379,39 @@ def plot_with_projection(
         mesh_cmap = resolved_cmap.copy()
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
-    translucent_mollweide_overlay = (
-        projection_name == "mollweide"
-        and not created_fig
+    translucent_map = (
+        plot_mode == "map"
         and isinstance(mesh_kwargs["alpha"], (int, float, np.floating))
-        and 0.0 < mesh_kwargs["alpha"] < 1.0
-        and (pcolormesh_kwargs is None or pcolormesh_kwargs.keys() <= {"alpha"})
+        and 0.0 <= mesh_kwargs["alpha"] < 1.0
     )
+    if translucent_map and pcolormesh_kwargs is not None:
+        unsupported = set(pcolormesh_kwargs) - {"alpha", "rasterized", "shading", "zorder"}
+        if unsupported or mesh_kwargs["shading"] not in {"nearest", "auto"}:
+            raise ValueError(
+                "Translucent maps use a warped image; pcolormesh_kwargs may "
+                "set alpha, rasterized, or shading='nearest' or 'auto'. "
+                "Set drawing order with the top-level zorder argument."
+            )
     quad = None
-    if is_overlay_mask or translucent_mollweide_overlay:
+    if is_overlay_mask or translucent_map:
         # A transparent projected QuadMesh can be split into overlapping
         # polygons by Cartopy. Its semi-transparent edges then accumulate
         # unevenly, obscuring the map beneath a translucent overlay.
         # Let Cartopy warp one raster instead: it is composited once and
         # keeps mask regions and translucent map layers visually uniform.
         #
-        # ``values`` is on an ascending latitude/longitude centre grid, so
-        # these are its pixel boundaries rather than its centre coordinates.
+        # ``values`` is on an ascending latitude/longitude centre grid.
+        # Use its pixel boundaries for the image extent.
         # Retain the sampling resolution (or Cartopy's sensible 750-pixel
         # minimum for smaller preview grids) during the warp.
         quad = ax.imshow(
             values,
             transform=ccrs.PlateCarree(),
-            extent=(-180.0, 180.0, -90.0, 90.0),
+            extent=raster_extent,
             origin="lower",
             interpolation="nearest",
             regrid_shape=max(750, n_theta),
+            rasterized=mesh_kwargs["rasterized"],
             cmap=mesh_cmap,
             vmin=vmin,
             vmax=vmax,
@@ -1397,7 +1420,6 @@ def plot_with_projection(
             zorder=zorder,
         )
     elif not vector_field:
-        
         quad = ax.pcolormesh(
             lon,
             lat,

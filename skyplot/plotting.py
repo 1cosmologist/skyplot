@@ -248,7 +248,9 @@ def mollweide(
     gridline_kwargs : dict or None, default=None
         Overrides for gridline color, style, width, spacing, or opacity.
     pcolormesh_kwargs : dict or None, default=None
-        Extra keyword arguments passed to ``GeoAxes.pcolormesh``.
+        Extra mesh options. For maps with ``alpha < 1``, only ``alpha``,
+        ``rasterized``, and nearest or auto ``shading`` are used. Set drawing
+        order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. ``cmap``, ``vmin``,
@@ -372,7 +374,9 @@ def orthographic(
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh keyword arguments.
+        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
+        options are limited to ``alpha``, ``rasterized``, and nearest or auto
+        ``shading``. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
@@ -502,7 +506,9 @@ def platecarree(
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options.
+        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
+        options are limited to ``alpha``, ``rasterized``, and nearest or auto
+        ``shading``. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
@@ -633,7 +639,9 @@ def equidistantconic(
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
     gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options.
+        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
+        options are limited to ``alpha``, ``rasterized``, and nearest or auto
+        ``shading``. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments

@@ -578,19 +578,32 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
     assert len(fig.axes) == 2
 
 
-def test_map_alpha_is_passed_to_pcolormesh() -> None:
+def test_map_alpha_selects_a_single_image() -> None:
     hp_map = np.ones(hp.nside2npix(2))
     options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
 
     fig = mollweide(hp_map, alpha=0.35, pcolormesh_kwargs={"alpha": 0.8}, **options)
-    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(0.35)
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.35)
 
     fig = mollweide(hp_map, pcolormesh_kwargs={"alpha": 0.8}, **options)
-    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(0.8)
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.8)
+
+    fig = mollweide(hp_map, alpha=1.0, **options)
+    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(1.0)
 
 
+def test_translucent_map_rejects_mesh_only_options() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    with pytest.raises(ValueError, match="Translucent maps use a warped image"):
+        mollweide(
+            hp_map, alpha=0.5, pcolormesh_kwargs={"edgecolors": "red"},
+            n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False,
+        )
+
+
+@pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
 @pytest.mark.parametrize("alpha_kwargs", [{"alpha": 0.03}, {"pcolormesh_kwargs": {"alpha": 0.03}}])
-def test_translucent_mollweide_overlay_preserves_base_map(alpha_kwargs) -> None:
+def test_translucent_projection_overlay_preserves_base_map(plotter, alpha_kwargs) -> None:
     size = hp.nside2npix(4)
     pol_map = np.linspace(0.0, 3000.0, size)
     lic_map = np.linspace(0.0, 1.0, size)
@@ -598,17 +611,21 @@ def test_translucent_mollweide_overlay_preserves_base_map(alpha_kwargs) -> None:
         "n_theta": 48, "n_phi": 96, "figsize": (4.0, 3.0), "dpi": 80,
         "show_gridlines": False, "add_colorbar": False,
     }
-    fig = mollweide(
+    base_options = dict(options)
+    if plotter in (platecarree, equidistantconic):
+        base_options["extent"] = (-80.0, 80.0, -45.0, 45.0)
+    fig = plotter(
         pol_map, cmap="sunburst",
         norm=SymLogNorm(linthresh=10.0, vmin=0.0, vmax=3000.0),
-        zorder=1, **options,
+        zorder=1, **base_options,
     )
     canvas = FigureCanvasAgg(fig)
     canvas.draw()
     before = np.asarray(canvas.buffer_rgba()).copy()
 
     ax = fig.axes[0]
-    mollweide(lic_map, ax=ax, cmap="gray", zorder=3, **alpha_kwargs, **options)
+    view = ax.get_extent(crs=ccrs.PlateCarree())
+    plotter(lic_map, ax=ax, cmap="gray", zorder=3, **alpha_kwargs, **options)
     canvas.draw()
     after = np.asarray(canvas.buffer_rgba())
 
@@ -616,6 +633,33 @@ def test_translucent_mollweide_overlay_preserves_base_map(alpha_kwargs) -> None:
     difference = np.abs(after[center][:3].astype(int) - before[center][:3].astype(int))
     assert difference.max() <= 10
     assert ax.images[-1].get_alpha() == pytest.approx(0.03)
+    if plotter in (platecarree, equidistantconic):
+        assert ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(view)
+    if plotter is platecarree:
+        lon_pad = (view[1] - view[0]) / (2 * (options["n_phi"] - 1))
+        lat_pad = (view[3] - view[2]) / (2 * (options["n_theta"] - 1))
+        assert ax.images[-1].get_extent() == pytest.approx((
+            view[0] - lon_pad, view[1] + lon_pad,
+            view[2] - lat_pad, view[3] + lat_pad,
+        ))
+
+
+def test_translucent_gnomonic_overlay_preserves_base_map() -> None:
+    hp_map = np.linspace(0.0, 1.0, hp.nside2npix(4))
+    options = {"n_theta": 48, "n_phi": 96, "show_gridlines": False, "add_colorbar": False}
+    fig = gnomonic(hp_map, **options)
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    before = np.asarray(canvas.buffer_rgba()).copy()
+
+    gnomonic(hp_map, ax=fig.axes[0], cmap="gray", alpha=0.03, **options)
+    canvas.draw()
+    after = np.asarray(canvas.buffer_rgba())
+
+    center = (before.shape[0] // 2, before.shape[1] // 2)
+    difference = np.abs(after[center][:3].astype(int) - before[center][:3].astype(int))
+    assert difference.max() <= 10
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.03)
 
 
 def test_overlay_mask_draws_only_invalid_pixels() -> None:
@@ -772,7 +816,7 @@ def test_plot_alpha_defaults_and_overlay_mask(plotter) -> None:
     assert fig._skyplot_payload["alpha"] is None
 
     fig = plotter(component, alpha=0.4, **options)
-    artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+    artist = fig.axes[0].images[-1]
     assert artist.get_alpha() == pytest.approx(0.4)
 
     fig = plotter(mask, plot_mode="overlay_mask", **options)

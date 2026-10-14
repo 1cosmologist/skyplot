@@ -47,6 +47,12 @@ Colorbars label both displayed color limits. With ``SymLogNorm``,
 ``norm="symlog"``, or ``PlanckLogNorm``, they also label the visible
 ``-linthresh`` and ``+linthresh`` boundaries of the linear region.
 
+For a translucent scalar layer in any projection, call the same plotting
+function with ``plot_mode="map"``, an existing ``ax``, and ``alpha < 1``.
+The layer is rendered as one image to keep its opacity uniform. Translucent
+maps use ``alpha``, ``rasterized``, and nearest or auto ``shading`` in
+``pcolormesh_kwargs``. Set drawing order with the top-level ``zorder`` argument.
+
 Plotting uses nearest-pixel sampling by default (``interpolate=False``) and
 makes missing, non-finite, or sentinel-valued samples transparent
 (``badcolor=None``). Pass ``interpolate=True`` or a color such as
