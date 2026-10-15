@@ -28,6 +28,7 @@ py.install_sources(
     'normalization.py',
     'plotlib.py',
     'plotting.py',
+    'result.py',
     'sampling.py',
     'saving.py',
   ],
