@@ -37,6 +37,7 @@ from matplotlib.scale import SymmetricalLogScale
 from importlib import resources
 
 from .sampling import make_theta_phi_grid, sample_at_angles
+from .result import PlotResult
 
 _SUPPORTED_PROJECTIONS_ORDER = (
     "mollweide",
@@ -1077,7 +1078,7 @@ def plot_with_projection(
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Render a sampled sky map on a supplied Cartopy projection.
 
     This is the implementation primitive behind the named projection
@@ -1195,8 +1196,8 @@ def plot_with_projection(
 
     Returns
     -------
-    matplotlib.figure.Figure
-        The figure containing the rendered map.
+    skyplot.PlotResult
+        The figure and map axes, available as ``result.figure`` and ``result.ax``.
     """
     if dpi <= 0:
         raise ValueError("dpi must be a positive integer.")
@@ -1318,7 +1319,6 @@ def plot_with_projection(
     if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
 
-    created_fig = ax is None
     if ax is None:
         map_crs = projection_factory(**projection_kwargs)
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi, subplot_kw={"projection": map_crs})
@@ -1524,12 +1524,7 @@ def plot_with_projection(
         "dpi": dpi,
     }
 
-    # Prevent matplotlib's Jupyter inline backend from auto-displaying this
-    # figure a second time in addition to the one shown via the return value.
-    if created_fig:
-        plt.close(fig)
-
     global _last_figure
     _last_figure = fig
 
-    return fig
+    return PlotResult(fig, ax)

@@ -34,7 +34,6 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 from matplotlib.colors import ListedColormap, Normalize
-from matplotlib.figure import Figure
 
 from . import plotlib as _plotlib
 from .plotlib import (
@@ -53,6 +52,7 @@ from .plotlib import (
     _with_bad_color,
 )
 from .sampling import sample_at_angles
+from .result import PlotResult
 
 
 def add_gridlines(
@@ -184,7 +184,7 @@ def mollweide(
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy Mollweide projection.
 
     Parameters
@@ -323,7 +323,7 @@ def orthographic(
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy Orthographic projection.
 
     Parameters
@@ -460,7 +460,7 @@ def platecarree(
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy PlateCarree projection.
 
     Parameters
@@ -604,7 +604,7 @@ def equidistantconic(
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy EquidistantConic projection.
 
     Parameters
@@ -760,7 +760,7 @@ def gnomonic(
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
-) -> Figure:
+) -> PlotResult:
     """Plot a local gnomonic view using Matplotlib.
 
     Parameters
@@ -907,7 +907,6 @@ def gnomonic(
     if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
 
-    created_fig = ax is None
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     else:
@@ -998,10 +997,8 @@ def gnomonic(
         "zorder": zorder,
         "colorbar_orientation": colorbar.orientation if add_colorbar else "horizontal",
     }
-    if created_fig:
-        plt.close(fig)
     _plotlib._last_figure = fig
-    return fig
+    return PlotResult(fig, ax)
 
 __all__ = [
     "AVAILABLE_PROJECTIONS",

@@ -12,6 +12,7 @@ from astropy.wcs import WCS
 from matplotlib.colors import SymLogNorm, to_rgba
 import skyplot.plotlib as plotlib
 import skyplot.plotting as plotting
+from skyplot.result import PlotResult
 from skyplot.normalization import PlanckLogNorm
 
 matplotlib.use("Agg")
@@ -283,7 +284,8 @@ def test_projection_plotter_accepts_multi_axis_wcs_with_explicit_mapping() -> No
         add_colorbar=False,
     )
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     assert getattr(fig, "_skyplot_payload")["shape"] == [8, 16]
 
 
@@ -395,15 +397,35 @@ def test_badcolor_none_makes_missing_samples_transparent() -> None:
     "func",
     [mollweide, orthographic, platecarree, equidistantconic, gnomonic],
 )
-def test_projection_plotters_return_matplotlib_figure(func) -> None:
+def test_projection_plotters_return_live_plot_result(func) -> None:
     nside = 8
     rng = np.random.default_rng(10)
     hp_map = rng.normal(size=hp.nside2npix(nside))
 
     fig = func(hp_map, n_theta=18, n_phi=36)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     assert len(fig.axes) >= 1
+    assert fig.ax is fig.figure.axes[0]
+    assert fig.figure.number in plt.get_fignums()
+    assert not hasattr(fig, "_repr_png_")
+    assert not hasattr(fig, "_repr_mimebundle_")
+
+
+def test_pyplot_savefig_uses_new_plot(tmp_path) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    result = mollweide(
+        hp_map, n_theta=8, n_phi=16, show_gridlines=False,
+        add_colorbar=False,
+    )
+    output = tmp_path / "current_plot.png"
+
+    assert plt.gcf() is result.figure
+    plt.savefig(output)
+
+    assert output.exists()
+    assert output.stat().st_size > 0
 
 
 def test_projection_plotter_accepts_2d_wcs_data() -> None:
@@ -413,7 +435,8 @@ def test_projection_plotter_accepts_2d_wcs_data() -> None:
 
     fig = mollweide(data, wcs=wcs, n_theta=12, n_phi=24, interpolate=False)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["shape"] == [12, 24]
 
@@ -535,7 +558,8 @@ def test_projection_plotter_accepts_ndmap_like_with_wcs_attribute() -> None:
 
     fig = platecarree(ndmap_like, n_theta=10, n_phi=18, interpolate=False)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_projection_plotter_rejects_2d_input_without_wcs() -> None:
@@ -575,7 +599,8 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
         alpha=0.4,
     )
 
-    assert fig_overlay is fig
+    assert fig_overlay.figure is fig.figure
+    assert fig_overlay.ax is ax
     assert len(fig.axes) == 2
 
 
@@ -673,7 +698,7 @@ def test_translucent_projection_overlay_preserves_base_map(plotter) -> None:
         norm=SymLogNorm(linthresh=10.0, vmin=0.0, vmax=3000.0),
         zorder=1, **base_options,
     )
-    canvas = FigureCanvasAgg(fig)
+    canvas = FigureCanvasAgg(fig.figure)
     canvas.draw()
     before = np.asarray(canvas.buffer_rgba()).copy()
 
@@ -702,7 +727,7 @@ def test_translucent_gnomonic_overlay_preserves_base_map() -> None:
     hp_map = np.linspace(0.0, 1.0, hp.nside2npix(4))
     options = {"n_theta": 48, "n_phi": 96, "show_gridlines": False, "add_colorbar": False}
     fig = gnomonic(hp_map, **options)
-    canvas = FigureCanvasAgg(fig)
+    canvas = FigureCanvasAgg(fig.figure)
     canvas.draw()
     before = np.asarray(canvas.buffer_rgba()).copy()
 
@@ -824,7 +849,8 @@ def test_vector_field_draws_a_transparent_overlay(method: str) -> None:
     )
 
     payload = getattr(fig, "_skyplot_payload")
-    assert result is fig
+    assert result.figure is fig.figure
+    assert result.ax is ax
     assert payload["plot_mode"] == "vector_field"
     assert payload["vector_method"] == method
     assert payload["vmin"] is None
@@ -962,7 +988,7 @@ def test_colorbar_kwarg_passes_matplotlib_options(plotter) -> None:
     )
 
     colorbar_ax = fig.axes[-1]
-    FigureCanvasAgg(fig).draw()
+    FigureCanvasAgg(fig.figure).draw()
     assert colorbar_ax.get_ylabel() == "Custom units"
     assert colorbar_ax.get_yticks() == pytest.approx([-1.0, 0.0, 1.0])
     assert [label.get_text() for label in colorbar_ax.get_yticklabels()] == [
@@ -1069,7 +1095,8 @@ def test_existing_axes_extent_overrides_extent_argument() -> None:
     )
 
     payload = getattr(result, "_skyplot_payload")
-    assert result is fig
+    assert result.figure is fig.figure
+    assert result.ax is ax
     assert payload["extent"] == pytest.approx([-80.0, -20.0, 10.0, 50.0])
     assert ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
         [-80.0, -20.0, 10.0, 50.0]
@@ -1092,7 +1119,8 @@ def test_gnomonic_defaults_and_payload_shape() -> None:
 
     fig = gnomonic(hp_map)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["projection"] == "gnomonic"
     assert payload["shape"] == [500, 500]
@@ -1201,7 +1229,8 @@ def test_mollweide_accepts_matplotlib_cmap_name() -> None:
         cmap="viridis",
     )
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_projection_kwargs_are_recorded_in_payload() -> None:
@@ -1379,7 +1408,8 @@ def test_mollweide_colormaps_name_resolution(monkeypatch) -> None:
         cmap="batlow",
     )
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_gridline_defaults_in_payload() -> None:

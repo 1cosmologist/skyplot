@@ -28,12 +28,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from matplotlib.figure import Figure
+from .result import PlotResult
 
 _FORMATS = {"png", "jpg", "jpeg", "svg", "pdf", "eps"}
 
 
 def save_figure(
-    fig: Figure | None = None,
+    fig: Figure | PlotResult | None = None,
     output_path: str | Path | None = None,
     *,
     width: int | None = None,
@@ -62,6 +63,9 @@ def save_figure(
         fig = _get_last_figure()
         if fig is None:
             raise ValueError("No figure provided and no skyplot figure has been created yet.")
+
+    if isinstance(fig, PlotResult):
+        fig = fig.figure
 
     out = Path(output_path)
 

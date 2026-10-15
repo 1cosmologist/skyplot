@@ -131,7 +131,7 @@ pixels are painted as a translucent overlay. Select this layer solely with
    mollweide(
        mask,
        resolution="high",
-       ax=fig.axes[0],
+       ax=fig.ax,
        badcolor=None,
        plot_mode="overlay_mask",
        alpha=0.4,
@@ -179,7 +179,7 @@ control than the shorthand ``norm="symlog"``.
 Customization - Dark Mode
 -------------------------
 
-SkyPlot returns an ordinary Matplotlib figure, so use Matplotlib's
+SkyPlot returns a ``PlotResult`` with ``figure`` and ``ax`` attributes. Use Matplotlib's
 ``rc_context`` to apply a style locally.  For Cartopy projections, also set
 the ``"geo"`` spine explicitly: it is the map boundary and is separate from
 the normal Matplotlib axes spines.  The colorbar is an additional axes, so its
@@ -226,7 +226,7 @@ is useful when comparing maps; do not also pass top-level ``vmin`` or
            colorbar_title=r"$\mu$K${}_{\rm CMB}$",
        )
 
-       map_ax = fig.axes[0]
+       map_ax = fig.ax
        map_ax.spines["geo"].set_edgecolor("white")
        map_ax.spines["geo"].set_linewidth(0.8)
 
@@ -421,7 +421,7 @@ Vector field visualization
 
 ``plot_mode="vector_field"`` adds a transparent streamplot or quiver artist
 to an existing map axes. Render the scalar magnitude in a separate ordinary
-map call first, then pass ``ax=fig.axes[0]`` for the overlay. Scalar map
+map call first, then pass ``ax=fig.ax`` for the overlay. Scalar map
 arguments (``cmap``, ``vmin``, ``vmax``, and ``norm``) are ignored by the
 overlay; configure the artist through ``vector_kwargs``.
 
@@ -466,7 +466,7 @@ control their appearance.
 
    mollweide(
        (east_component, north_component),
-       ax=vector_fig.axes[0],
+       ax=vector_fig.ax,
        plot_mode="vector_field",
        vector_kwargs={
            "method": "streamplot",
@@ -504,7 +504,7 @@ with a streamplot result.
    )
    mollweide(
       (east_component, north_component),
-      ax=vector_fig.axes[0],
+      ax=vector_fig.ax,
       plot_mode="vector_field",
       vector_kwargs={
          "method": "quiver",
@@ -530,9 +530,17 @@ streamline representation, use
 Saving a figure
 ---------------
 
-Each plotting function returns a Matplotlib figure. Pass that figure to
-``save_figure`` to write an image.
+Each plotting function returns a ``PlotResult``. Its ``figure`` is the
+Matplotlib figure and its ``ax`` is the map axes. In a notebook, a bare plot
+call displays one image through Matplotlib's inline backend. The figure stays
+open, so ``plt.savefig(...)`` saves it while it is pyplot's current figure;
+``fig.figure.savefig(...)`` always saves this specific plot. Pass the result
+to ``save_figure`` to use SkyPlot's export settings.
 
 .. code-block:: python
 
    save_figure(fig, "simulated_sky.png", figsize=(12, 6), dpi=300)
+
+   # Add another layer to the same map.
+   mollweide(allowed_mask, ax=fig.ax, plot_mode="overlay_mask", alpha=0.35)
+   fig.figure.savefig("sky_with_mask.png")

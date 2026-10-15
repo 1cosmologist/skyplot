@@ -7,6 +7,7 @@ import pytest
 
 from skyplot.plotlib import _gnomonic_inverse
 from skyplot.plotting import gnomonic
+from skyplot.result import PlotResult
 
 matplotlib.use("Agg")
 
@@ -43,7 +44,8 @@ def test_gnomonic_returns_figure_for_healpix() -> None:
 
     fig = gnomonic(hp_map, center=(45.0, -20.0), xsize=80, ysize=64, pixel_size_arcmin=6.0)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["projection"] == "gnomonic"
     assert payload["shape"] == [64, 80]
@@ -77,7 +79,8 @@ def test_gnomonic_accepts_ndmap_like_with_wcs_attribute() -> None:
 
     fig = gnomonic(ndmap_like, center=(0.0, 0.0), xsize=32, ysize=24)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_gnomonic_inverse_uses_true_tangent_plane_scale() -> None:
@@ -99,7 +102,9 @@ def test_gnomonic_overlay_orientation_is_idempotent() -> None:
     ax = fig.axes[0]
     assert ax.xaxis_inverted()
 
-    gnomonic(hp_map, ax=ax, xsize=8, ysize=8, add_colorbar=False)
+    overlay = gnomonic(hp_map, ax=ax, xsize=8, ysize=8, add_colorbar=False)
+    assert overlay.figure is fig.figure
+    assert overlay.ax is ax
     assert ax.xaxis_inverted()
 
     gnomonic(

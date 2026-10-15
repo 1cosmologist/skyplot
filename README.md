@@ -49,7 +49,7 @@ from skyplot import PlanckLogNorm, mollweide, save_figure
 nside = 64
 sky_map = np.random.default_rng(1234).normal(size=hp.nside2npix(nside))
 
-fig = mollweide(
+plot = mollweide(
     sky_map,
     resolution="medium",
     cmap="batlow",
@@ -57,7 +57,7 @@ fig = mollweide(
     colorbar_title=r"$\mu$K",
 )
 
-save_figure(fig, "cmb_map.png", figsize=(12, 6), dpi=300)
+save_figure(plot, "cmb_map.png", figsize=(12, 6), dpi=300)
 ```
 
 For the Planck-style symmetric asinh/logarithmic scaling, pass
@@ -84,13 +84,21 @@ to draw an opaque map with Cartopy's pixel mesh. `pcolormesh_kwargs` applies
 only in mesh mode; use the top-level `alpha`, `zorder`, and color arguments
 with the default image mode. Gnomonic maps already use an image.
 
-In a notebook, display a returned figure explicitly:
+In a notebook, a bare plotting call displays one image at the end of the cell.
+SkyPlot returns a `PlotResult` with `.figure` (the Matplotlib figure) and
+`.ax` (the map axes). The figure stays registered with pyplot, so you can
+add layers or save it later:
 
 ```python
-from IPython.display import display
+import matplotlib.pyplot as plt
 
-display(fig)
+plot = mollweide(sky_map)
+plt.savefig("sky.png")  # saves pyplot's current figure
+plot.figure.savefig("sky.png")  # saves this specific figure
 ```
+
+If another figure has become current, use `plot.figure.savefig(...)` to target
+this plot.
 
 ## Layers: masks and vector fields
 
@@ -115,7 +123,7 @@ north = -np.cos(psi)
 
 mollweide(
     (east, north),
-    ax=fig.axes[0],
+    ax=fig.ax,
     plot_mode="vector_field",
     vector_kwargs={
         "method": "streamplot",  # or "quiver"
@@ -137,7 +145,7 @@ To overlay the invalid region of a binary allowed-pixel mask:
 ```python
 mollweide(
     allowed_mask,
-    ax=fig.axes[0],
+    ax=fig.ax,
     plot_mode="overlay_mask",
     overlay_color="black",
     alpha=0.35,
@@ -163,10 +171,10 @@ fig = mollweide(
 
 ## Styling
 
-SkyPlot returns standard Matplotlib figures, so use Matplotlib configuration
+SkyPlot returns a `PlotResult` containing a standard Matplotlib figure, so use Matplotlib configuration
 and normal artist customization. For example, a local dark style can be
 applied with `plt.rc_context(...)`; Cartopy map boundaries use the separate
-`"geo"` spine and can be styled through `fig.axes[0].spines["geo"]`.
+`"geo"` spine and can be styled through `fig.ax.spines["geo"]`.
 See the [customization guide](https://skyplot.readthedocs.io/en/latest/usage.html)
 for a complete example, including colorbar styling.
 

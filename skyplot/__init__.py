@@ -38,6 +38,7 @@ from .plotting import (
     platecarree,
 )
 from .sampling import make_theta_phi_grid, sample_at_angles, sample_full_sky
+from .result import PlotResult
 from .saving import save_figure
 
 # Apply bundled fonts as default sans-serif family when skyplot is imported.
@@ -48,6 +49,7 @@ __all__ = [
     "DPI_PRESETS",
     "FONT_SIZE_PRESETS",
     "PlanckLogNorm",
+    "PlotResult",
     "RESOLUTION_PRESETS",
     "add_gridlines",
     "configure_default_sans_serif",
