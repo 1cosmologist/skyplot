@@ -31,7 +31,6 @@ quicker previews.
        mollweide,
        orthographic,
        platecarree,
-       save_figure,
    )
 
    print("Available projections:", AVAILABLE_PROJECTIONS)
@@ -534,12 +533,12 @@ Each plotting function returns a ``PlotResult``. Its ``figure`` is the
 Matplotlib figure and its ``ax`` is the map axes. In a notebook, a bare plot
 call displays one image through Matplotlib's inline backend. The figure stays
 open, so ``plt.savefig(...)`` saves it while it is pyplot's current figure;
-``fig.figure.savefig(...)`` always saves this specific plot. Pass the result
-to ``save_figure`` to use SkyPlot's export settings.
+``fig.figure.savefig(...)`` always saves this specific plot. Pass Matplotlib
+export options such as ``dpi`` and ``bbox_inches`` to ``savefig``.
 
 .. code-block:: python
 
-   save_figure(fig, "simulated_sky.png", figsize=(12, 6), dpi=300)
+   fig.figure.savefig("simulated_sky.png", dpi=300, bbox_inches="tight")
 
    # Add another layer to the same map.
    mollweide(allowed_mask, ax=fig.ax, plot_mode="overlay_mask", alpha=0.35)

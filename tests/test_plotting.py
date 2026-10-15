@@ -1174,9 +1174,9 @@ def test_gnomonic_rejects_invalid_parameters(kwargs) -> None:
 
 
 def test_resolution_preset_values() -> None:
-    assert RESOLUTION_PRESETS["low"] == (480, 960)
-    assert RESOLUTION_PRESETS["medium"] == (720, 1440)
-    assert RESOLUTION_PRESETS["high"] == (1440, 2880)
+    assert RESOLUTION_PRESETS["low"] == (720, 1440)
+    assert RESOLUTION_PRESETS["medium"] == (1440, 2880)
+    assert RESOLUTION_PRESETS["high"] == (2880, 5760)
 
 
 @pytest.mark.parametrize("resolution", ["low", "medium", "high"])
@@ -1195,7 +1195,7 @@ def test_resolution_presets_apply_larger_font_sizes(monkeypatch, resolution) -> 
     base_size = FONT_SIZE_PRESETS[resolution]
     assert fig.dpi == DPI_PRESETS[resolution]
     assert getattr(fig, "_skyplot_payload")["dpi"] == DPI_PRESETS[resolution]
-    assert ax.title.get_fontsize() == pytest.approx(1.1 * base_size)
+    assert ax.title.get_fontsize() == pytest.approx(1.02 * base_size)
     assert colorbar_ax.xaxis.label.get_size() == pytest.approx(base_size)
     assert colorbar_ax.xaxis.get_ticklabels()[0].get_size() == pytest.approx(0.85 * base_size)
 

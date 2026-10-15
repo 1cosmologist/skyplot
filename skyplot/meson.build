@@ -30,7 +30,6 @@ py.install_sources(
     'plotting.py',
     'result.py',
     'sampling.py',
-    'saving.py',
   ],
   pure: true,
   subdir: 'skyplot',

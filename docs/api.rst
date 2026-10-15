@@ -35,11 +35,3 @@ Sampling
    :members:
    :undoc-members:
    :show-inheritance:
-
-Saving
-------
-
-.. automodule:: skyplot.saving
-   :members:
-   :undoc-members:
-   :show-inheritance:

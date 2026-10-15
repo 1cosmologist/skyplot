@@ -39,7 +39,6 @@ from .plotting import (
 )
 from .sampling import make_theta_phi_grid, sample_at_angles, sample_full_sky
 from .result import PlotResult
-from .saving import save_figure
 
 # Apply bundled fonts as default sans-serif family when skyplot is imported.
 setup_package_fonts()
@@ -62,6 +61,5 @@ __all__ = [
     "register_package_fonts",
     "sample_at_angles",
     "sample_full_sky",
-    "save_figure",
     "setup_package_fonts",
 ]

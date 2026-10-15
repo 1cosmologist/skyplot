@@ -61,9 +61,9 @@ def _get_cartopy_crs_module() -> Any:
 AVAILABLE_PROJECTIONS = _SUPPORTED_PROJECTIONS_ORDER
 
 RESOLUTION_PRESETS: dict[str, tuple[int, int]] = {
-    "low": (480, 960),
-    "medium": (720, 1440),
-    "high": (1440, 2880),
+    "low": (720, 1440),
+    "medium": (1440, 2880),
+    "high": (2880, 5760),
 }
 
 # Font sizes are in typographic points.  They are deliberately larger than
@@ -80,14 +80,6 @@ DPI_PRESETS: dict[str, int] = {
     "medium": 200,
     "high": 300,
 }
-
-_last_figure: Figure | None = None
-
-
-def _get_last_figure() -> Figure | None:
-    """Return the most recently created skyplot figure, if any."""
-    return _last_figure
-
 
 def _get_display_grid(
     n_theta: int,
@@ -1051,8 +1043,8 @@ def plot_with_projection(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
@@ -1123,9 +1115,9 @@ def plot_with_projection(
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates axes. Vector mode
         requires axes from a previously rendered magnitude map.
-    n_theta : int, default=720
+    n_theta : int, default=1440
         Colatitude sampling-grid size.
-    n_phi : int, default=1440
+    n_phi : int, default=2880
         Longitude sampling-grid size.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset overriding ``n_theta`` and ``n_phi``. It also uses a 14, 16,
@@ -1523,8 +1515,5 @@ def plot_with_projection(
         "font_size": font_size,
         "dpi": dpi,
     }
-
-    global _last_figure
-    _last_figure = fig
 
     return PlotResult(fig, ax)

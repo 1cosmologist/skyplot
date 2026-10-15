@@ -44,7 +44,7 @@ SkyPlot requires Python 3.10 or later.
 import healpy as hp
 import numpy as np
 
-from skyplot import PlanckLogNorm, mollweide, save_figure
+from skyplot import PlanckLogNorm, mollweide
 
 nside = 64
 sky_map = np.random.default_rng(1234).normal(size=hp.nside2npix(nside))
@@ -57,7 +57,7 @@ plot = mollweide(
     colorbar_title=r"$\mu$K",
 )
 
-save_figure(plot, "cmb_map.png", figsize=(12, 6), dpi=300)
+plot.figure.savefig("cmb_map.png", dpi=300, bbox_inches="tight")
 ```
 
 For the Planck-style symmetric asinh/logarithmic scaling, pass

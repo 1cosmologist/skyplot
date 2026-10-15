@@ -158,8 +158,8 @@ def mollweide(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
@@ -208,7 +208,7 @@ def mollweide(
         Explicit ``(longitude_axis, latitude_axis)`` WCS world-axis mapping.
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates an axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Colatitude and longitude sampling-grid sizes.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset that overrides ``n_theta`` and ``n_phi`` and selects a larger
@@ -297,8 +297,8 @@ def orthographic(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
@@ -345,7 +345,7 @@ def orthographic(
         Explicit longitude/latitude WCS world-axis indices.
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Colatitude and longitude sampling-grid sizes.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset overriding both sampling-grid sizes and selecting a 14, 16, or
@@ -434,8 +434,8 @@ def platecarree(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
@@ -488,7 +488,7 @@ def platecarree(
         Explicit longitude/latitude WCS axes.
     ax : GeoAxes or None, default=None
         Existing overlay axes; ``None`` creates axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Sampling-grid dimensions.
     resolution : {"low", "medium", "high"} or None, default=None
         Sampling-grid preset and 14, 16, or 18 point base font for low,
@@ -578,8 +578,8 @@ def equidistantconic(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
@@ -631,7 +631,7 @@ def equidistantconic(
         Explicit longitude/latitude WCS world-axis mapping.
     ax : GeoAxes or None, default=None
         Existing overlay axes; ``None`` creates axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Sampling-grid dimensions.
     resolution : {"low", "medium", "high"} or None, default=None
         Sampling-grid preset and 14, 16, or 18 point base font for low,
@@ -997,7 +997,6 @@ def gnomonic(
         "zorder": zorder,
         "colorbar_orientation": colorbar.orientation if add_colorbar else "horizontal",
     }
-    _plotlib._last_figure = fig
     return PlotResult(fig, ax)
 
 __all__ = [
