@@ -170,6 +170,7 @@ def mollweide(
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwarg: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -230,6 +231,8 @@ def mollweide(
         Matplotlib normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Label for the optional colorbar.
+    colorbar_kwarg : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
@@ -273,7 +276,8 @@ def mollweide(
         world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta, n_phi=n_phi,
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
-        colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
+        colorbar_title=colorbar_title, colorbar_kwarg=colorbar_kwarg,
+        title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
@@ -305,6 +309,7 @@ def orthographic(
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwarg: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -362,6 +367,8 @@ def orthographic(
         Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Optional colorbar label.
+    colorbar_kwarg : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Optional axes title.
     show_gridlines : bool, default=True
@@ -405,7 +412,8 @@ def orthographic(
         world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta, n_phi=n_phi,
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
-        colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
+        colorbar_title=colorbar_title, colorbar_kwarg=colorbar_kwarg,
+        title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
@@ -438,6 +446,7 @@ def platecarree(
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwarg: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -500,6 +509,8 @@ def platecarree(
         Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwarg : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
@@ -544,7 +555,8 @@ def platecarree(
         wcs=wcs, world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta,
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
-        norm=norm, colorbar_title=colorbar_title, title=title,
+        norm=norm, colorbar_title=colorbar_title,
+        colorbar_kwarg=colorbar_kwarg, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
@@ -578,6 +590,7 @@ def equidistantconic(
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwarg: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -639,6 +652,8 @@ def equidistantconic(
         Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwarg : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
@@ -697,7 +712,8 @@ def equidistantconic(
         wcs=wcs, world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta,
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
-        norm=norm, colorbar_title=colorbar_title, title=title,
+        norm=norm, colorbar_title=colorbar_title,
+        colorbar_kwarg=colorbar_kwarg, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
@@ -730,6 +746,7 @@ def gnomonic(
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwarg: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = False,
     gridline_kwargs: dict[str, Any] | None = None,
@@ -782,6 +799,8 @@ def gnomonic(
         Image color normalization.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwarg : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=False
@@ -947,9 +966,22 @@ def gnomonic(
     )
     if add_colorbar:
         assert image is not None
-        colorbar = fig.colorbar(image, ax=ax, orientation="horizontal", pad=0.08, fraction=0.05, aspect=40)
-        colorbar.set_label(colorbar_title)
-        _plotlib._set_colorbar_ticks(colorbar)
+        colorbar_options: dict[str, Any] = {
+            "ax": ax, "orientation": "horizontal", "pad": 0.08, "fraction": 0.05,
+            "aspect": 40, "label": colorbar_title,
+        }
+        if colorbar_kwarg is not None:
+            colorbar_options.update(colorbar_kwarg)
+            if "location" in colorbar_kwarg and "orientation" not in colorbar_kwarg:
+                colorbar_options.pop("orientation")
+        colorbar = fig.colorbar(image, **colorbar_options)
+        custom_ticks = colorbar_kwarg and (
+            "ticks" in colorbar_kwarg or "format" in colorbar_kwarg
+        )
+        if not custom_ticks:
+            _plotlib._set_colorbar_ticks(colorbar)
+        else:
+            colorbar.minorticks_off()
     if title:
         ax.set_title(title)
     fig.tight_layout()
@@ -964,7 +996,7 @@ def gnomonic(
         "vector_method": vector_method,
         "alpha": alpha,
         "zorder": zorder,
-        "colorbar_orientation": "horizontal",
+        "colorbar_orientation": colorbar.orientation if add_colorbar else "horizontal",
     }
     if created_fig:
         plt.close(fig)

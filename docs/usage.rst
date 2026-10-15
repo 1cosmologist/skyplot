@@ -43,9 +43,13 @@ normalization. It derives unset limits from the plotted map; pass explicit
 ``vmin`` and ``vmax`` when a fixed scale is needed. ``linthresh=10.0`` sets
 the scale of the linear region around zero and can be adjusted.
 
-Colorbars label both displayed color limits. With ``SymLogNorm``,
-``norm="symlog"``, or ``PlanckLogNorm``, they also label the visible
-``-linthresh`` and ``+linthresh`` boundaries of the linear region.
+Colorbars label only the displayed color limits by default. Other major ticks
+remain visible without labels, and minor ticks are hidden. With
+``SymLogNorm``, ``norm="symlog"``, or ``PlanckLogNorm``, the visible
+``-linthresh`` and ``+linthresh`` boundaries are labeled too. Pass
+``colorbar_kwarg={...}`` for Matplotlib colorbar options such as ``ticks``,
+``format``, ``label``, or ``orientation``. Explicit ``ticks`` or ``format``
+use Matplotlib's labels in place of SkyPlot's default labels.
 
 For a translucent scalar layer in any projection, call the same plotting
 function with ``plot_mode="map"``, an existing ``ax``, and ``alpha < 1``.

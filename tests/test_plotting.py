@@ -941,6 +941,44 @@ def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> No
         matches = np.flatnonzero(np.isclose(ticks, value))
         assert len(matches) == 1
         assert labels[matches[0]] == f"{value:g}"
+    for tick, label in zip(ticks, labels):
+        if not np.any(np.isclose(tick, expected)):
+            assert label == ""
+    assert colorbar_ax.xaxis.get_minorticklocs().size == 0
+
+
+@pytest.mark.parametrize(
+    "plotter", [mollweide, orthographic, platecarree, equidistantconic, gnomonic],
+)
+def test_colorbar_kwarg_passes_matplotlib_options(plotter) -> None:
+    hp_map = np.linspace(-1.0, 1.0, hp.nside2npix(2))
+    fig = plotter(
+        hp_map, n_theta=12, n_phi=24, show_gridlines=False,
+        vmin=-1.0, vmax=1.0,
+        colorbar_kwarg={
+            "orientation": "vertical", "ticks": [-1.0, 0.0, 1.0],
+            "format": "%.1f", "label": "Custom units",
+        },
+    )
+
+    colorbar_ax = fig.axes[-1]
+    FigureCanvasAgg(fig).draw()
+    assert colorbar_ax.get_ylabel() == "Custom units"
+    assert colorbar_ax.get_yticks() == pytest.approx([-1.0, 0.0, 1.0])
+    assert [label.get_text() for label in colorbar_ax.get_yticklabels()] == [
+        "-1.0", "0.0", "1.0",
+    ]
+    assert colorbar_ax.yaxis.get_minorticklocs().size == 0
+
+
+def test_colorbar_kwarg_location_can_set_orientation() -> None:
+    hp_map = np.linspace(0.0, 1.0, hp.nside2npix(2))
+    fig = mollweide(
+        hp_map, n_theta=12, n_phi=24, show_gridlines=False,
+        colorbar_kwarg={"location": "right"},
+    )
+
+    assert fig._skyplot_payload["colorbar_orientation"] == "vertical"
 
 
 def test_planck_colorbar_marks_derived_limits() -> None:

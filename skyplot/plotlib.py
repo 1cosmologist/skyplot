@@ -1009,11 +1009,11 @@ def _draw_vector_field(
 
 
 def _set_colorbar_ticks(colorbar: Any) -> None:
-    """Label color limits and, for symmetric log scales, linear boundaries."""
+    """Show major marks, labeling only limits and linear-region boundaries."""
     vmin, vmax = float(colorbar.vmin), float(colorbar.vmax)
     ticks = np.asarray(colorbar.get_ticks(), dtype=float)
     ticks = ticks[np.isfinite(ticks) & (ticks >= vmin) & (ticks <= vmax)]
-    required = [vmin, vmax]
+    labeled = [vmin, vmax]
 
     norm = colorbar.norm
     if isinstance(norm, SymLogNorm):
@@ -1023,14 +1023,19 @@ def _set_colorbar_ticks(colorbar: Any) -> None:
     else:
         linthresh = getattr(norm, "_skyplot_linthresh", None)
     if linthresh is not None:
-        required.extend((-linthresh, linthresh))
+        labeled.extend((-linthresh, linthresh))
 
-    required_ticks = np.unique(required)
+    required_ticks = np.unique(labeled)
     for value in required_ticks:
         ticks = ticks[~np.isclose(ticks, value, rtol=1e-12, atol=0.0)]
     ticks = np.sort(np.concatenate((ticks, required_ticks)))
     ticks = ticks[(ticks >= vmin) & (ticks <= vmax)]
-    colorbar.set_ticks(ticks, labels=[f"{tick:g}" for tick in ticks])
+    labels = []
+    for tick in ticks:
+        is_labeled = np.any(np.isclose(tick, required_ticks, rtol=1e-12, atol=0.0))
+        labels.append(f"{tick:g}" if is_labeled else "")
+    colorbar.set_ticks(ticks, labels=labels)
+    colorbar.minorticks_off()
 
 
 def plot_with_projection(
@@ -1057,6 +1062,7 @@ def plot_with_projection(
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwarg: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -1142,6 +1148,9 @@ def plot_with_projection(
         Mesh color normalization.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwarg : dict or None, default=None
+        Extra keyword arguments passed to Matplotlib ``Figure.colorbar``.
+        Explicit ``ticks`` or ``format`` override SkyPlot's default tick labels.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
@@ -1455,16 +1464,23 @@ def plot_with_projection(
 
     if add_colorbar:
         assert quad is not None
-        cbar = fig.colorbar(
-            quad,
-            ax=ax,
-            orientation="horizontal",
-            pad=0.06,
-            fraction=0.035,
-            aspect=40,
+        colorbar_options: dict[str, Any] = {
+            "ax": ax, "orientation": "horizontal", "pad": 0.06, "fraction": 0.035,
+            "aspect": 40, "label": colorbar_title,
+        }
+        if colorbar_kwarg is not None:
+            colorbar_options.update(colorbar_kwarg)
+            if "location" in colorbar_kwarg and "orientation" not in colorbar_kwarg:
+                colorbar_options.pop("orientation")
+        cbar = fig.colorbar(quad, **colorbar_options)
+        cbar.set_label(colorbar_options["label"], fontsize=font_size)
+        custom_ticks = colorbar_kwarg and (
+            "ticks" in colorbar_kwarg or "format" in colorbar_kwarg
         )
-        cbar.set_label(colorbar_title, fontsize=font_size)
-        _set_colorbar_ticks(cbar)
+        if not custom_ticks:
+            _set_colorbar_ticks(cbar)
+        else:
+            cbar.minorticks_off()
         cbar.ax.tick_params(labelsize=0.85 * font_size)
 
     if title:
@@ -1503,7 +1519,7 @@ def plot_with_projection(
         "gridline_linewidth": applied_gridline_kwargs["linewidth"],
         "lon_gridline_spacing_deg": applied_gridline_kwargs["lon_gridline_spacing_deg"],
         "lat_gridline_spacing_deg": applied_gridline_kwargs["lat_gridline_spacing_deg"],
-        "colorbar_orientation": "horizontal",
+        "colorbar_orientation": cbar.orientation if add_colorbar else "horizontal",
         "font_size": font_size,
         "dpi": dpi,
     }
