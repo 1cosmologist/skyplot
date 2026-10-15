@@ -75,6 +75,12 @@ pass `extent="auto"` to infer WCS-map bounds; the same value selects the
 global extent for HEALPix maps. Omitting `extent` keeps the default global view.
 Regional extents also limit the geographic domain sampled by the grid.
 
+Mollweide, Orthographic, Plate Carrée, and Equidistant Conic scalar maps use
+a warped image by default, including opaque maps. Set `mesh_method="mesh"`
+to draw an opaque map with Cartopy's pixel mesh. `pcolormesh_kwargs` applies
+only in mesh mode; use the top-level `alpha`, `zorder`, and color arguments
+with the default image mode. Gnomonic maps already use an image.
+
 In a notebook, display a returned figure explicitly:
 
 ```python

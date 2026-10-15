@@ -1065,6 +1065,7 @@ def plot_with_projection(
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -1164,11 +1165,12 @@ def plot_with_projection(
         and mask overlays to 3. An explicit value is used unchanged.
     gridline_kwargs : dict or None, default=None
         Gridline option overrides.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
     pcolormesh_kwargs : dict or None, default=None
-        Extra mesh keyword arguments. With map opacity below 1, only
-        ``alpha``, ``rasterized``, and nearest or auto ``shading`` are used
-        because the map is rendered as one warped image. Set drawing order
-        with the top-level ``zorder`` argument.
+        Extra mesh keyword arguments, used only when ``mesh_method="mesh"``.
+        Ignored otherwise. Set drawing order with the top-level ``zorder``.
     vector_kwargs : dict or None, default=None
         Options passed to the vector artist when ``plot_mode="vector_field"``.
         ``method`` selects ``"streamplot"`` (default) or ``"quiver"``.
@@ -1191,6 +1193,8 @@ def plot_with_projection(
         raise ValueError("dpi must be a positive integer.")
     if len(figsize) != 2 or figsize[0] <= 0.0 or figsize[1] <= 0.0:
         raise ValueError("figsize must be a two-element tuple of positive values.")
+    if mesh_method != "wrap" and mesh_method != "mesh":
+        raise ValueError("mesh_method must be 'wrap' or 'mesh'.")
 
     if resolution is not None:
         if resolution not in RESOLUTION_PRESETS:
@@ -1358,7 +1362,7 @@ def plot_with_projection(
         "rasterized": True,
         "alpha": alpha,
     }
-    if pcolormesh_kwargs is not None:
+    if mesh_method == "mesh" and pcolormesh_kwargs is not None:
         mesh_kwargs.update(pcolormesh_kwargs)
     if alpha is not None:
         mesh_kwargs["alpha"] = alpha
@@ -1369,7 +1373,7 @@ def plot_with_projection(
         mesh_kwargs["alpha"] = alpha
 
     mesh_cmap = resolved_cmap
-    if projection_name == "mollweide" and not np.isclose(
+    if mesh_method == "mesh" and projection_name == "mollweide" and not np.isclose(
         float(projection_kwargs.get("central_longitude", 0.0)) % 360.0,
         0.0,
     ):
@@ -1379,21 +1383,12 @@ def plot_with_projection(
         mesh_cmap = resolved_cmap.copy()
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
-    translucent_map = (
-        plot_mode == "map"
-        and isinstance(mesh_kwargs["alpha"], (int, float, np.floating))
-        and 0.0 <= mesh_kwargs["alpha"] < 1.0
-    )
-    if translucent_map and pcolormesh_kwargs is not None:
-        unsupported = set(pcolormesh_kwargs) - {"alpha", "rasterized", "shading", "zorder"}
-        if unsupported or mesh_kwargs["shading"] not in {"nearest", "auto"}:
-            raise ValueError(
-                "Translucent maps use a warped image; pcolormesh_kwargs may "
-                "set alpha, rasterized, or shading='nearest' or 'auto'. "
-                "Set drawing order with the top-level zorder argument."
-            )
+    if plot_mode == "map" and mesh_method == "mesh":
+        mesh_alpha = mesh_kwargs["alpha"]
+        if isinstance(mesh_alpha, (int, float, np.floating)) and mesh_alpha < 1.0:
+            raise ValueError("mesh_method='mesh' requires an opaque map (alpha=1 or None).")
     quad = None
-    if is_overlay_mask or translucent_map:
+    if is_overlay_mask or (plot_mode == "map" and mesh_method == "wrap"):
         # A transparent projected QuadMesh can be split into overlapping
         # polygons by Cartopy. Its semi-transparent edges then accumulate
         # unevenly, obscuring the map beneath a translucent overlay.
@@ -1404,20 +1399,35 @@ def plot_with_projection(
         # Use its pixel boundaries for the image extent.
         # Retain the sampling resolution (or Cartopy's sensible 750-pixel
         # minimum for smaller preview grids) during the warp.
+        image_vmin, image_vmax = vmin, vmax
+        if not is_overlay_mask and (vmin is None or vmax is None):
+            finite_values = np.asarray(values)[np.isfinite(values)]
+            if finite_values.size:
+                if isinstance(norm, Normalize):
+                    norm.autoscale_None(finite_values)
+                else:
+                    if image_vmin is None:
+                        image_vmin = float(finite_values.min())
+                    if image_vmax is None:
+                        image_vmax = float(finite_values.max())
+        image_kwargs: dict[str, Any] = {}
+        source_crs = ccrs.PlateCarree()
+        if ax.projection != source_crs:
+            image_kwargs["regrid_shape"] = max(750, n_theta)
         quad = ax.imshow(
             values,
-            transform=ccrs.PlateCarree(),
+            transform=source_crs,
             extent=raster_extent,
             origin="lower",
             interpolation="nearest",
-            regrid_shape=max(750, n_theta),
-            rasterized=mesh_kwargs["rasterized"],
+            rasterized=True,
             cmap=mesh_cmap,
-            vmin=vmin,
-            vmax=vmax,
+            vmin=image_vmin,
+            vmax=image_vmax,
             norm=norm,
-            alpha=alpha if is_overlay_mask else mesh_kwargs["alpha"],
+            alpha=alpha,
             zorder=zorder,
+            **image_kwargs,
         )
     elif not vector_field:
         quad = ax.pcolormesh(
@@ -1484,6 +1494,7 @@ def plot_with_projection(
         "title": title,
         "show_gridlines": show_gridlines,
         "plot_mode": plot_mode,
+        "mesh_method": mesh_method,
         "vector_method": vector_method,
         "alpha": alpha,
         "zorder": zorder,

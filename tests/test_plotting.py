@@ -368,8 +368,8 @@ def test_badvalue_and_badcolor_are_applied_to_plot_colormap() -> None:
         badcolor="magenta",
     )
 
-    quad = fig.axes[0].collections[0]
-    assert np.allclose(quad.cmap.get_bad(), to_rgba("magenta"))
+    image = fig.axes[0].images[0]
+    assert np.allclose(image.cmap.get_bad(), to_rgba("magenta"))
     payload = getattr(fig, "_skyplot_payload")
     assert payload["badvalue"] == hp.UNSEEN
     assert payload["badcolor"] == "magenta"
@@ -387,8 +387,8 @@ def test_badcolor_none_makes_missing_samples_transparent() -> None:
         badcolor=None,
     )
 
-    quad = fig.axes[0].collections[0]
-    assert quad.cmap.get_bad()[3] == pytest.approx(0.0)
+    image = fig.axes[0].images[0]
+    assert image.cmap.get_bad()[3] == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize(
@@ -520,6 +520,7 @@ def test_mollweide_rotated_central_longitude_keeps_all_map_samples() -> None:
         interpolate=False,
         show_gridlines=False,
         add_colorbar=False,
+        mesh_method="mesh",
     )
 
     values = fig.axes[0].collections[0].get_array()
@@ -560,7 +561,7 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
         hp_map_a,
         n_theta=12,
         n_phi=24,
-        pcolormesh_kwargs={"alpha": 0.8},
+        alpha=0.8,
     )
     ax = fig.axes[0]
 
@@ -571,7 +572,7 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
         n_phi=24,
         show_gridlines=False,
         add_colorbar=False,
-        pcolormesh_kwargs={"alpha": 0.4},
+        alpha=0.4,
     )
 
     assert fig_overlay is fig
@@ -586,24 +587,77 @@ def test_map_alpha_selects_a_single_image() -> None:
     assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.35)
 
     fig = mollweide(hp_map, pcolormesh_kwargs={"alpha": 0.8}, **options)
-    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.8)
+    assert fig.axes[0].images[-1].get_alpha() is None
 
     fig = mollweide(hp_map, alpha=1.0, **options)
-    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(1.0)
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(1.0)
 
 
-def test_translucent_map_rejects_mesh_only_options() -> None:
+def test_wrap_ignores_mesh_only_options() -> None:
     hp_map = np.ones(hp.nside2npix(2))
-    with pytest.raises(ValueError, match="Translucent maps use a warped image"):
-        mollweide(
-            hp_map, alpha=0.5, pcolormesh_kwargs={"edgecolors": "red"},
-            n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False,
-        )
+    fig = mollweide(
+        hp_map, alpha=0.5,
+        pcolormesh_kwargs={"edgecolors": "red", "alpha": 0.1},
+        n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False,
+    )
+    assert len(fig.axes[0].images) == 1
+    assert fig.axes[0].images[0].get_alpha() == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
-@pytest.mark.parametrize("alpha_kwargs", [{"alpha": 0.03}, {"pcolormesh_kwargs": {"alpha": 0.03}}])
-def test_translucent_projection_overlay_preserves_base_map(plotter, alpha_kwargs) -> None:
+def test_mesh_method_selects_opaque_map_artist(plotter) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
+
+    wrapped = plotter(hp_map, **options)
+    assert len(wrapped.axes[0].images) == 1
+    assert wrapped._skyplot_payload["mesh_method"] == "wrap"
+
+    wrapped_opaque = plotter(hp_map, alpha=1.0, **options)
+    assert len(wrapped_opaque.axes[0].images) == 1
+    assert wrapped_opaque.axes[0].images[0].get_alpha() == pytest.approx(1.0)
+
+    mesh = plotter(hp_map, mesh_method="mesh", pcolormesh_kwargs={"edgecolors": "red"}, **options)
+    assert mesh.axes[0].collections
+    assert not mesh.axes[0].images
+    assert mesh._skyplot_payload["mesh_method"] == "mesh"
+
+
+def test_mesh_method_rejects_invalid_and_translucent_mesh() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
+    with pytest.raises(ValueError, match="mesh_method"):
+        mollweide(hp_map, mesh_method="unknown", **options)
+    with pytest.raises(ValueError, match="opaque"):
+        mollweide(hp_map, mesh_method="mesh", alpha=0.5, **options)
+    with pytest.raises(ValueError, match="opaque"):
+        mollweide(hp_map, mesh_method="mesh", pcolormesh_kwargs={"alpha": 0.5}, **options)
+
+
+def test_orthographic_wrap_keeps_color_limits_from_hidden_samples() -> None:
+    hp_map = np.zeros(hp.nside2npix(4))
+    hp_map[hp.ang2pix(4, 180.0, 0.0, lonlat=True)] = 100.0
+
+    fig = orthographic(hp_map, n_theta=48, n_phi=96, show_gridlines=False)
+
+    assert fig.axes[0].images[0].get_clim() == pytest.approx((0.0, 100.0))
+
+
+def test_rotated_mollweide_wrap_keeps_badcolor() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    hp_map[0] = hp.UNSEEN
+
+    fig = mollweide(
+        hp_map, projection_kwargs={"central_longitude": 90.0},
+        n_theta=18, n_phi=36, badcolor="magenta",
+        show_gridlines=False, add_colorbar=False,
+    )
+
+    assert fig.axes[0].images[0].cmap.get_bad() == pytest.approx(to_rgba("magenta"))
+
+
+@pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
+def test_translucent_projection_overlay_preserves_base_map(plotter) -> None:
     size = hp.nside2npix(4)
     pol_map = np.linspace(0.0, 3000.0, size)
     lic_map = np.linspace(0.0, 1.0, size)
@@ -625,7 +679,7 @@ def test_translucent_projection_overlay_preserves_base_map(plotter, alpha_kwargs
 
     ax = fig.axes[0]
     view = ax.get_extent(crs=ccrs.PlateCarree())
-    plotter(lic_map, ax=ax, cmap="gray", zorder=3, **alpha_kwargs, **options)
+    plotter(lic_map, ax=ax, cmap="gray", zorder=3, alpha=0.03, **options)
     canvas.draw()
     after = np.asarray(canvas.buffer_rgba())
 
@@ -811,7 +865,7 @@ def test_plot_alpha_defaults_and_overlay_mask(plotter) -> None:
     options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
 
     fig = plotter(component, **options)
-    artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+    artist = fig.axes[0].images[-1]
     assert artist.get_alpha() is None
     assert fig._skyplot_payload["alpha"] is None
 
@@ -873,7 +927,7 @@ def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> No
 
     fig = plotter(hp_map, **options)
     if norm_kind == "string_symlog":
-        artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+        artist = fig.axes[0].images[-1]
         threshold = artist.norm._scale.linthresh
     expected = [-100.0, 100.0]
     if threshold is not None:
@@ -895,7 +949,7 @@ def test_planck_colorbar_marks_derived_limits() -> None:
         hp_map, n_theta=12, n_phi=24, show_gridlines=False,
         norm=PlanckLogNorm(linthresh=10.0),
     )
-    artist = fig.axes[0].collections[-1]
+    artist = fig.axes[0].images[-1]
     ticks = fig.axes[-1].get_xticks()
 
     for value in (artist.norm.vmin, -10.0, 10.0, artist.norm.vmax):
@@ -910,9 +964,7 @@ def test_plot_modes_have_layered_zorders_and_accept_an_override() -> None:
         component, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False,
     )
     ax = fig.axes[0]
-    assert any(
-        artist.get_zorder() == pytest.approx(1.0) for artist in ax.collections
-    )
+    assert ax.images[0].get_zorder() == pytest.approx(1.0)
 
     mollweide(mask, ax=ax, plot_mode="overlay_mask", n_theta=12, n_phi=24)
     assert ax.images[-1].get_zorder() == pytest.approx(3.0)

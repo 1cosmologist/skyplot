@@ -49,9 +49,12 @@ Colorbars label both displayed color limits. With ``SymLogNorm``,
 
 For a translucent scalar layer in any projection, call the same plotting
 function with ``plot_mode="map"``, an existing ``ax``, and ``alpha < 1``.
-The layer is rendered as one image to keep its opacity uniform. Translucent
-maps use ``alpha``, ``rasterized``, and nearest or auto ``shading`` in
-``pcolormesh_kwargs``. Set drawing order with the top-level ``zorder`` argument.
+The layer is rendered as one image to keep its opacity uniform. Mollweide,
+Orthographic, Plate Carrée, and Equidistant Conic scalar maps also use a
+warped image when opaque. Set ``mesh_method="mesh"`` to use Cartopy's pixel
+mesh for an opaque map. ``pcolormesh_kwargs`` is ignored unless mesh mode is
+selected. Set opacity and drawing order with the top-level ``alpha`` and
+``zorder`` arguments. Gnomonic maps already use an image.
 
 Plotting uses nearest-pixel sampling by default (``interpolate=False``) and
 makes missing, non-finite, or sentinel-valued samples transparent

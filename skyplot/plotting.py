@@ -177,6 +177,7 @@ def mollweide(
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -226,7 +227,7 @@ def mollweide(
     vmin, vmax : float or None, defaults=None, None
         Optional lower and upper color-scale limits.
     norm : str or matplotlib.colors.Normalize or None, default=None
-        Matplotlib normalization forwarded to ``pcolormesh``.
+        Matplotlib normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Label for the optional colorbar.
     title : str or None, default=None
@@ -247,10 +248,12 @@ def mollweide(
         and mask overlays to 3.
     gridline_kwargs : dict or None, default=None
         Overrides for gridline color, style, width, spacing, or opacity.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
     pcolormesh_kwargs : dict or None, default=None
-        Extra mesh options. For maps with ``alpha < 1``, only ``alpha``,
-        ``rasterized``, and nearest or auto ``shading`` are used. Set drawing
-        order with the top-level ``zorder`` argument.
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. ``cmap``, ``vmin``,
@@ -274,7 +277,8 @@ def mollweide(
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
-        gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
+        gridline_kwargs=gridline_kwargs, mesh_method=mesh_method,
+        pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
@@ -308,6 +312,7 @@ def orthographic(
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -354,7 +359,7 @@ def orthographic(
     vmin, vmax : float or None, defaults=None, None
         Optional color-scale limits.
     norm : str or Normalize or None, default=None
-        Color normalization passed to ``pcolormesh``.
+        Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Optional colorbar label.
     title : str or None, default=None
@@ -373,10 +378,14 @@ def orthographic(
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
-    gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
-        options are limited to ``alpha``, ``rasterized``, and nearest or auto
-        ``shading``. Set drawing order with the top-level ``zorder`` argument.
+    gridline_kwargs : dict or None, default=None
+        Extra gridline options.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
+    pcolormesh_kwargs : dict or None, default=None
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
@@ -400,7 +409,8 @@ def orthographic(
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
-        gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
+        gridline_kwargs=gridline_kwargs, mesh_method=mesh_method,
+        pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
@@ -435,6 +445,7 @@ def platecarree(
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -486,7 +497,7 @@ def platecarree(
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None
-        Mesh color normalization.
+        Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
     title : str or None, default=None
@@ -505,10 +516,14 @@ def platecarree(
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
-    gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
-        options are limited to ``alpha``, ``rasterized``, and nearest or auto
-        ``shading``. Set drawing order with the top-level ``zorder`` argument.
+    gridline_kwargs : dict or None, default=None
+        Extra gridline options.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
+    pcolormesh_kwargs : dict or None, default=None
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
@@ -534,7 +549,8 @@ def platecarree(
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
-        pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
+        mesh_method=mesh_method, pcolormesh_kwargs=pcolormesh_kwargs,
+        add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
         figsize=figsize, dpi=dpi,
     )
@@ -569,6 +585,7 @@ def equidistantconic(
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
@@ -619,7 +636,7 @@ def equidistantconic(
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None
-        Mesh color normalization.
+        Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
     title : str or None, default=None
@@ -638,10 +655,14 @@ def equidistantconic(
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
-    gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
-        options are limited to ``alpha``, ``rasterized``, and nearest or auto
-        ``shading``. Set drawing order with the top-level ``zorder`` argument.
+    gridline_kwargs : dict or None, default=None
+        Extra gridline options.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
+    pcolormesh_kwargs : dict or None, default=None
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
@@ -681,7 +702,8 @@ def equidistantconic(
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
-        pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
+        mesh_method=mesh_method, pcolormesh_kwargs=pcolormesh_kwargs,
+        add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
         figsize=figsize, dpi=dpi,
     )
