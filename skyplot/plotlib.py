@@ -1094,8 +1094,8 @@ def plot_with_projection(
         ``extent="auto"`` infers the WCS image footprint for a WCS-backed 2D
         map and selects the global extent for a HEALPix map. ``None`` keeps
         the default global view. For regional Plate Carrée and Equidistant
-        Conic views, the configured sampling grid is generated within the
-        selected extent.
+        Conic views, the sampling grid covers the entire projected viewport,
+        which can extend beyond these geographic bounds for conic views.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -1262,14 +1262,33 @@ def plot_with_projection(
         (0.0, 0.0, 0.0, 0.0) if is_overlay_mask else badcolor,
     )
 
+    supplied_axes = ax is not None
+    if ax is None:
+        map_crs = projection_factory(**projection_kwargs)
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, subplot_kw={"projection": map_crs})
+        if validated_extent is None:
+            ax.set_global()
+        else:
+            ax.set_extent(validated_extent, crs=ccrs.PlateCarree())
+    else:
+        fig = ax.figure
+
+        # An existing axes owns its viewport. In particular, an ``extent``
+        # passed to an overlay must not replace the visible region.
+        validated_extent = tuple(
+            float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
+        )
+
     display_extent = None
-    if projection_name in {"platecarree", "equidistantconic"}:
-        if ax is not None:
-            display_extent = tuple(
-                float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
-            )
-        elif isinstance(validated_extent, tuple):
-            display_extent = validated_extent
+    if projection_name in {"platecarree", "equidistantconic"} and (
+        supplied_axes or isinstance(validated_extent, tuple)
+    ):
+        # A conic projection's rectangular viewport includes geographic
+        # positions outside the longitude/latitude rectangle passed to
+        # set_extent. Ask Cartopy for the full visible geographic bounds.
+        display_extent = tuple(
+            float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
+        )
     lon, lat = _get_display_grid(
         n_theta=n_theta, n_phi=n_phi, extent=display_extent,
     )
@@ -1310,23 +1329,6 @@ def plot_with_projection(
 
     if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
-
-    if ax is None:
-        map_crs = projection_factory(**projection_kwargs)
-        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, subplot_kw={"projection": map_crs})
-        if validated_extent is None:
-            ax.set_global()
-        else:
-            ax.set_extent(validated_extent, crs=ccrs.PlateCarree())
-    else:
-        fig = ax.figure
-
-        # An existing axes owns its viewport.  In particular, an ``extent``
-        # passed for a newly-created axes must not make the metadata claim a
-        # different rendered region when layering onto an existing GeoAxes.
-        validated_extent = tuple(
-            float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
-        )
 
     if projection_name in {
         "mollweide",

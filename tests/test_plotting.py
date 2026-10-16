@@ -543,6 +543,45 @@ def test_local_extent_samples_wcs_map_on_local_grid() -> None:
     assert sampled_world[:, 1].max() == pytest.approx(-2.0)
 
 
+@pytest.mark.parametrize("central_longitude", [0.0, 25.0])
+def test_conic_sampling_covers_projected_viewport(monkeypatch, central_longitude) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    requested = (-60.0, 60.0, -75.0, -10.0)
+    sampled_extents = []
+    original_grid = plotlib._get_display_grid
+
+    def record_grid(n_theta, n_phi, extent=None):
+        sampled_extents.append(extent)
+        return original_grid(n_theta, n_phi, extent)
+
+    monkeypatch.setattr(plotlib, "_get_display_grid", record_grid)
+    result = equidistantconic(
+        hp_map,
+        projection_kwargs={
+            "central_longitude": central_longitude,
+            "central_latitude": -45.0,
+            "standard_parallels": (-70.0, -15.0),
+        },
+        extent=requested,
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    sampled = sampled_extents[0]
+    visible = result.ax.get_extent(crs=ccrs.PlateCarree())
+    assert sampled == pytest.approx(visible)
+    assert sampled[0] < requested[0]
+    assert sampled[1] > requested[1]
+    assert sampled[3] > requested[3]
+    assert result.figure._skyplot_payload["extent"] == list(requested)
+    rendered = np.ma.asarray(result.ax.images[0].get_array())
+    masked = np.ma.getmaskarray(rendered)
+    for row, col in ((20, 20), (20, -21), (-21, 20), (-21, -21)):
+        assert not masked[row, col]
+
+
 def test_mollweide_rotated_central_longitude_keeps_all_map_samples() -> None:
     hp_map = np.ones(hp.nside2npix(2))
 

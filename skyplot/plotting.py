@@ -474,8 +474,8 @@ def platecarree(
         ``(lon_min, lon_max, lat_min, lat_max)`` in degrees for new axes;
         ``extent="auto"`` infers the WCS image footprint for WCS-backed maps
         and selects the global extent for HEALPix maps. ``None`` keeps the
-        default global view. Regional extents also define the sampling domain;
-        an existing ``ax`` retains its own extent.
+        default global view. The grid samples the visible viewport; an
+        existing ``ax`` retains its own extent.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -618,7 +618,9 @@ def equidistantconic(
         Geographic bounds for new axes and default projection-center inference.
         ``extent="auto"`` infers the WCS image footprint for WCS-backed maps
         and selects the global extent for HEALPix maps. ``None`` keeps the
-        default global view. Regional extents also define the sampling domain.
+        default global view. The grid samples the entire projected viewport,
+        which can extend beyond these bounds. The chosen projection parameters
+        determine that visible region.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None

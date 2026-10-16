@@ -69,8 +69,9 @@ derive the geographic extent from a WCS-backed 2D map. For a HEALPix map,
 ``extent="auto"`` selects the global extent. Omitting ``extent`` (or passing
 ``None``) keeps the default global view; pass
 ``extent=(lon_min, lon_max, lat_min, lat_max)`` for explicit bounds. For these
-regional projections, the selected extent also defines the geographic domain
-sampled by the configured grid.
+regional projections, the grid samples the entire projected viewport. A conic
+view can show positions outside the requested geographic extent; those visible
+positions are sampled too.
 
 Load a 1D HEALPix FITS map by setting ``map_path`` to a local file. The map
 must contain the field selected by ``field``; the notebook uses the first
@@ -534,12 +535,14 @@ Matplotlib figure and its ``ax`` is the map axes. In a notebook, a bare plot
 call displays one image through Matplotlib's inline backend. The figure stays
 open, so ``plt.savefig(...)`` saves it while it is pyplot's current figure;
 ``fig.figure.savefig(...)`` always saves this specific plot. Pass Matplotlib
-export options such as ``dpi`` and ``bbox_inches`` to ``savefig``.
+export options such as ``dpi`` and ``bbox_inches`` to ``savefig``. Use
+``bbox_inches="tight"`` when exporting titles or other artists near the figure
+edge; ``pad_inches`` only applies with that option.
 
 .. code-block:: python
 
-   fig.figure.savefig("simulated_sky.png", dpi=300, bbox_inches="tight")
+   fig.figure.savefig("simulated_sky.png", dpi=300, bbox_inches="tight", pad_inches=0.2)
 
    # Add another layer to the same map.
    mollweide(allowed_mask, ax=fig.ax, plot_mode="overlay_mask", alpha=0.35)
-   fig.figure.savefig("sky_with_mask.png")
+   fig.figure.savefig("sky_with_mask.png", bbox_inches="tight", pad_inches=0.2)

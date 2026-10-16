@@ -57,7 +57,7 @@ plot = mollweide(
     colorbar_title=r"$\mu$K",
 )
 
-plot.figure.savefig("cmb_map.png", dpi=300, bbox_inches="tight")
+plot.figure.savefig("cmb_map.png", dpi=300, bbox_inches="tight", pad_inches=0.2)
 ```
 
 For the Planck-style symmetric asinh/logarithmic scaling, pass
@@ -76,7 +76,8 @@ makes missing, non-finite, or sentinel-valued samples transparent
 when a different rendering is desired. For `platecarree` and `equidistantconic`,
 pass `extent="auto"` to infer WCS-map bounds; the same value selects the
 global extent for HEALPix maps. Omitting `extent` keeps the default global view.
-Regional extents also limit the geographic domain sampled by the grid.
+Regional views sample the entire projected viewport, including positions
+beyond the requested geographic extent when a conic projection reveals them.
 
 Mollweide, Orthographic, Plate Carrée, and Equidistant Conic scalar maps use
 a warped image by default, including opaque maps. Set `mesh_method="mesh"`
