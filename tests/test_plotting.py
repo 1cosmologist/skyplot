@@ -417,11 +417,22 @@ def test_pyplot_savefig_uses_new_plot(tmp_path) -> None:
     hp_map = np.ones(hp.nside2npix(2))
     result = mollweide(
         hp_map, n_theta=8, n_phi=16, show_gridlines=False,
-        add_colorbar=False,
+        add_colorbar=False, title="Full title remains visible",
     )
     output = tmp_path / "current_plot.png"
 
     assert plt.gcf() is result.figure
+    result.figure.canvas.draw()
+    renderer = result.figure.canvas.get_renderer()
+    assert result.ax.title.get_window_extent(renderer).y1 <= result.figure.bbox.y1
+
+    mollweide(
+        hp_map, ax=result.ax, n_theta=8, n_phi=16,
+        plot_mode="overlay_mask", show_gridlines=False,
+    )
+    result.figure.canvas.draw()
+    renderer = result.figure.canvas.get_renderer()
+    assert result.ax.title.get_window_extent(renderer).y1 <= result.figure.bbox.y1
     plt.savefig(output)
 
     assert output.exists()

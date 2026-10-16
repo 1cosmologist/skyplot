@@ -983,7 +983,7 @@ def gnomonic(
             colorbar.minorticks_off()
     if title:
         ax.set_title(title)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95) if ax.get_title() else None)
     fig._skyplot_payload = {  # type: ignore[attr-defined]
         "backend": "matplotlib-gnomonic", "projection": "gnomonic",
         "projection_kwargs": {"center": [lon0_deg, lat0_deg], "xsize": int(xsize), "ysize": int(ysize), "pixel_size_arcmin": float(pixel_size_arcmin), "astro_orientation": bool(astro_orientation)},

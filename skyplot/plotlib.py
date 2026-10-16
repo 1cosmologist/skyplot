@@ -1481,7 +1481,10 @@ def plot_with_projection(
         ax.set_title(title, fontsize=1.02 * font_size)
     ax.tick_params(labelsize=0.85 * font_size)
 
-    fig.tight_layout()
+    # Cartopy's tight layout can place the title just above the canvas, where
+    # a plain savefig() clips it. Reserve a small top margin whenever the axes
+    # has a title, including when an overlay reuses the same figure.
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95) if ax.get_title() else None)
 
 
     fig._skyplot_payload = {  # type: ignore[attr-defined]
