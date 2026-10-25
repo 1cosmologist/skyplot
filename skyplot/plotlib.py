@@ -27,12 +27,13 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any, Callable, Literal, Sequence
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
-from matplotlib.colors import Colormap, ListedColormap, Normalize, SymLogNorm
+from matplotlib.colors import Colormap, ListedColormap, LogNorm, Normalize, SymLogNorm
 from matplotlib.figure import Figure
-from matplotlib.scale import SymmetricalLogScale
+from matplotlib.scale import LogScale, SymmetricalLogScale
 
 from importlib import resources
 
@@ -1002,13 +1003,16 @@ def _draw_vector_field(
 
 
 def _set_colorbar_ticks(colorbar: Any) -> None:
-    """Show major marks, labeling only limits and linear-region boundaries."""
+    """Label limits and linear boundaries, using scientific notation in log ranges."""
     vmin, vmax = float(colorbar.vmin), float(colorbar.vmax)
     ticks = np.asarray(colorbar.get_ticks(), dtype=float)
     ticks = ticks[np.isfinite(ticks) & (ticks >= vmin) & (ticks <= vmax)]
     labeled = [vmin, vmax]
 
     norm = colorbar.norm
+    is_log = isinstance(norm, LogNorm) or isinstance(
+        getattr(norm, "_scale", None), LogScale,
+    )
     if isinstance(norm, SymLogNorm):
         linthresh = norm.linthresh
     elif isinstance(getattr(norm, "_scale", None), SymmetricalLogScale):
@@ -1026,7 +1030,13 @@ def _set_colorbar_ticks(colorbar: Any) -> None:
     labels = []
     for tick in ticks:
         is_labeled = np.any(np.isclose(tick, required_ticks, rtol=1e-12, atol=0.0))
-        labels.append(f"{tick:g}" if is_labeled else "")
+        if not is_labeled:
+            labels.append("")
+        elif tick != 0 and (is_log or (linthresh is not None and abs(tick) > linthresh)):
+            mantissa, exponent = f"{tick:.6e}".split("e")
+            labels.append(rf"${float(mantissa):g}\times10^{{{int(exponent)}}}$")
+        else:
+            labels.append(f"{tick:g}")
     colorbar.set_ticks(ticks, labels=labels)
     colorbar.minorticks_off()
 
@@ -1048,14 +1058,14 @@ def plot_with_projection(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
-    colorbar_kwarg: dict[str, Any] | None = None,
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -1127,8 +1137,8 @@ def plot_with_projection(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate samples instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification. ``None`` uses the active theme's default.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -1141,7 +1151,7 @@ def plot_with_projection(
         Mesh color normalization.
     colorbar_title : str, default="Map value"
         Colorbar label.
-    colorbar_kwarg : dict or None, default=None
+    colorbar_kwargs : dict or None, default=None
         Extra keyword arguments passed to Matplotlib ``Figure.colorbar``.
         Explicit ``ticks`` or ``format`` override SkyPlot's default tick labels.
     title : str or None, default=None
@@ -1197,6 +1207,9 @@ def plot_with_projection(
         raise ValueError("figsize must be a two-element tuple of positive values.")
     if mesh_method != "wrap" and mesh_method != "mesh":
         raise ValueError("mesh_method must be 'wrap' or 'mesh'.")
+
+    if cmap is None:
+        cmap = mpl.rcParams["image.cmap"]
 
     if resolution is not None:
         if resolution not in RESOLUTION_PRESETS:
@@ -1342,7 +1355,7 @@ def plot_with_projection(
         ax.invert_xaxis()
 
     applied_gridline_kwargs: dict[str, Any] = {
-        "color": "black",
+        "color": mpl.rcParams["grid.color"],
         "linestyle": "-",
         "linewidth": 0.2,
         "lon_gridline_spacing_deg": 30.0,
@@ -1462,14 +1475,14 @@ def plot_with_projection(
             "ax": ax, "orientation": "horizontal", "pad": 0.06, "fraction": 0.035,
             "aspect": 40, "label": colorbar_title,
         }
-        if colorbar_kwarg is not None:
-            colorbar_options.update(colorbar_kwarg)
-            if "location" in colorbar_kwarg and "orientation" not in colorbar_kwarg:
+        if colorbar_kwargs is not None:
+            colorbar_options.update(colorbar_kwargs)
+            if "location" in colorbar_kwargs and "orientation" not in colorbar_kwargs:
                 colorbar_options.pop("orientation")
         cbar = fig.colorbar(quad, **colorbar_options)
         cbar.set_label(colorbar_options["label"], fontsize=font_size)
-        custom_ticks = colorbar_kwarg and (
-            "ticks" in colorbar_kwarg or "format" in colorbar_kwarg
+        custom_ticks = colorbar_kwargs and (
+            "ticks" in colorbar_kwargs or "format" in colorbar_kwargs
         )
         if not custom_ticks:
             _set_colorbar_ticks(cbar)

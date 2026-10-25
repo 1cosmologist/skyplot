@@ -21,6 +21,13 @@ Most users should prefer :mod:`skyplot.plotting`.
    :members: plot_with_projection
 
 
+Themes
+------
+
+.. automodule:: skyplot.themes
+   :members: set_theme, register_package_fonts
+
+
 Normalization
 -------------
 

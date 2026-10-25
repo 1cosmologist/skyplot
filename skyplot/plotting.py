@@ -30,6 +30,7 @@ stable, user-facing plotting surface in one small place.
 from typing import Any, Literal, Sequence
 
 import healpy as hp
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
@@ -58,7 +59,7 @@ from .result import PlotResult
 def add_gridlines(
     ax: Any,
     *,
-    color: str = "black",
+    color: str | None = None,
     linestyle: str = "-",
     linewidth: float = 0.2,
     lon_gridline_spacing_deg: float = 30.0,
@@ -71,8 +72,8 @@ def add_gridlines(
     ----------
     ax : cartopy.mpl.geoaxes.GeoAxes
         Axes receiving the gridlines; required.
-    color : str, default="black"
-        Gridline color.
+    color : str or None, default=None
+        Gridline color. Uses Matplotlib's ``grid.color`` when omitted.
     linestyle : str, default="-"
         Matplotlib gridline style.
     linewidth : float, default=0.2
@@ -91,6 +92,8 @@ def add_gridlines(
     if lat_gridline_spacing_deg <= 0:
         raise ValueError("lat_gridline_spacing_deg must be positive.")
 
+    if color is None:
+        color = mpl.rcParams["grid.color"]
     ccrs = _get_cartopy_crs_module()
     lon_ticks = np.arange(-180.0 + lon_gridline_spacing_deg, 180.0 + 1e-6, lon_gridline_spacing_deg)
     lat_ticks = np.arange(-90.0 + lat_gridline_spacing_deg, 90.0 + 1e-6, lat_gridline_spacing_deg)
@@ -131,7 +134,8 @@ def _add_gnomonic_gridlines(
     lat_levels = np.arange(np.ceil(lat_min / lat_step) * lat_step, lat_max, lat_step)
 
     style: dict[str, Any] = {
-        "colors": "black", "linestyles": "-", "linewidths": 0.2, "alpha": 1.0,
+        "colors": mpl.rcParams["grid.color"], "linestyles": "-", "linewidths": 0.2,
+        "alpha": 1.0,
     }
     if gridline_kwargs is not None:
         style.update(gridline_kwargs)
@@ -163,14 +167,14 @@ def mollweide(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
-    colorbar_kwarg: dict[str, Any] | None = None,
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -218,8 +222,8 @@ def mollweide(
         Treat a 1D HEALPix map as NEST ordered.
     interpolate : bool, default=False
         Interpolate sampled values instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Matplotlib or ``colormaps`` colormap specification.
+    cmap : str, sequence, or None, default=None
+        Matplotlib or ``colormaps`` colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Input sentinel converted to missing data; ``None`` disables sentinel matching.
     badcolor : color or None, default=None
@@ -231,7 +235,7 @@ def mollweide(
         Matplotlib normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Label for the optional colorbar.
-    colorbar_kwarg : dict or None, default=None
+    colorbar_kwargs : dict or None, default=None
         Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
@@ -276,7 +280,7 @@ def mollweide(
         world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta, n_phi=n_phi,
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
-        colorbar_title=colorbar_title, colorbar_kwarg=colorbar_kwarg,
+        colorbar_title=colorbar_title, colorbar_kwargs=colorbar_kwargs,
         title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
@@ -302,14 +306,14 @@ def orthographic(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
-    colorbar_kwarg: dict[str, Any] | None = None,
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -355,8 +359,8 @@ def orthographic(
         Use HEALPix NEST ordering for a 1D map.
     interpolate : bool, default=False
         Interpolate sampled map values instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables sentinel matching.
     badcolor : color or None, default=None
@@ -367,7 +371,7 @@ def orthographic(
         Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Optional colorbar label.
-    colorbar_kwarg : dict or None, default=None
+    colorbar_kwargs : dict or None, default=None
         Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Optional axes title.
@@ -412,7 +416,7 @@ def orthographic(
         world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta, n_phi=n_phi,
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
-        colorbar_title=colorbar_title, colorbar_kwarg=colorbar_kwarg,
+        colorbar_title=colorbar_title, colorbar_kwargs=colorbar_kwargs,
         title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
@@ -439,14 +443,14 @@ def platecarree(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
-    colorbar_kwarg: dict[str, Any] | None = None,
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -497,8 +501,8 @@ def platecarree(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate samples instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -509,7 +513,7 @@ def platecarree(
         Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
-    colorbar_kwarg : dict or None, default=None
+    colorbar_kwargs : dict or None, default=None
         Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
@@ -556,7 +560,7 @@ def platecarree(
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title,
-        colorbar_kwarg=colorbar_kwarg, title=title,
+        colorbar_kwargs=colorbar_kwargs, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
@@ -583,14 +587,14 @@ def equidistantconic(
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
-    colorbar_kwarg: dict[str, Any] | None = None,
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
     plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
@@ -642,8 +646,8 @@ def equidistantconic(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate samples instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -654,7 +658,7 @@ def equidistantconic(
         Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
-    colorbar_kwarg : dict or None, default=None
+    colorbar_kwargs : dict or None, default=None
         Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
@@ -715,7 +719,7 @@ def equidistantconic(
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
         norm=norm, colorbar_title=colorbar_title,
-        colorbar_kwarg=colorbar_kwarg, title=title,
+        colorbar_kwargs=colorbar_kwargs, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
@@ -741,14 +745,14 @@ def gnomonic(
     ax: Any | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
-    colorbar_kwarg: dict[str, Any] | None = None,
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = False,
     gridline_kwargs: dict[str, Any] | None = None,
@@ -789,8 +793,8 @@ def gnomonic(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate sampled values instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -801,7 +805,7 @@ def gnomonic(
         Image color normalization.
     colorbar_title : str, default="Map value"
         Colorbar label.
-    colorbar_kwarg : dict or None, default=None
+    colorbar_kwargs : dict or None, default=None
         Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
@@ -850,6 +854,9 @@ def gnomonic(
         raise ValueError("pixel_size_arcmin must be positive.")
     if 0.5 * max(xsize, ysize) * pixel_size_arcmin >= 90.0 * 60.0:
         raise ValueError("Gnomonic views must remain within 90 degrees of the tangent point.")
+
+    if cmap is None:
+        cmap = mpl.rcParams["image.cmap"]
 
     lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
     plot_mode = _plotlib._validate_plot_mode(plot_mode)
@@ -971,13 +978,13 @@ def gnomonic(
             "ax": ax, "orientation": "horizontal", "pad": 0.08, "fraction": 0.05,
             "aspect": 40, "label": colorbar_title,
         }
-        if colorbar_kwarg is not None:
-            colorbar_options.update(colorbar_kwarg)
-            if "location" in colorbar_kwarg and "orientation" not in colorbar_kwarg:
+        if colorbar_kwargs is not None:
+            colorbar_options.update(colorbar_kwargs)
+            if "location" in colorbar_kwargs and "orientation" not in colorbar_kwargs:
                 colorbar_options.pop("orientation")
         colorbar = fig.colorbar(image, **colorbar_options)
-        custom_ticks = colorbar_kwarg and (
-            "ticks" in colorbar_kwarg or "format" in colorbar_kwarg
+        custom_ticks = colorbar_kwargs and (
+            "ticks" in colorbar_kwargs or "format" in colorbar_kwargs
         )
         if not custom_ticks:
             _plotlib._set_colorbar_ticks(colorbar)

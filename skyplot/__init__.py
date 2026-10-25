@@ -23,7 +23,6 @@
 
 """Skyplot package for HEALPix-based astrophysical sky-map visualization."""
 
-from .fonts import configure_default_sans_serif, register_package_fonts, setup_package_fonts
 from .normalization import PlanckLogNorm
 from .plotting import (
     AVAILABLE_PROJECTIONS,
@@ -37,21 +36,24 @@ from .plotting import (
     orthographic,
     platecarree,
 )
-from .sampling import make_theta_phi_grid, sample_at_angles, sample_full_sky
 from .result import PlotResult
+from .sampling import make_theta_phi_grid, sample_at_angles, sample_full_sky
+from .themes import DARK_COLORS, LIGHT_COLORS, THEMES, register_package_fonts, set_theme
 
-# Apply bundled fonts as default sans-serif family when skyplot is imported.
-setup_package_fonts()
+# Apply the modern theme to SkyPlot and subsequent Matplotlib plots.
+set_theme("modern")
 
 __all__ = [
     "AVAILABLE_PROJECTIONS",
+    "DARK_COLORS",
     "DPI_PRESETS",
     "FONT_SIZE_PRESETS",
+    "LIGHT_COLORS",
     "PlanckLogNorm",
     "PlotResult",
     "RESOLUTION_PRESETS",
+    "THEMES",
     "add_gridlines",
-    "configure_default_sans_serif",
     "equidistantconic",
     "gnomonic",
     "make_theta_phi_grid",
@@ -61,5 +63,5 @@ __all__ = [
     "register_package_fonts",
     "sample_at_angles",
     "sample_full_sky",
-    "setup_package_fonts",
+    "set_theme",
 ]

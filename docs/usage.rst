@@ -3,22 +3,23 @@ Usage
 
 This page follows the examples in ``notebooks/skyplot_package_test.ipynb``.
 They render a HEALPix dust map, optionally overlay a Galactic-plane mask, and
-then show the same data with each available sky projection.
+show the data with each available sky projection. The notebook also includes
+a WCS-backed map, polarization vectors, and a CMB map using ``PlanckLogNorm``.
 
 Set up the map
 ----------------
 
 Import the plotting functions and inspect the available projections and
-sampling presets. ``resolution="high"`` is used by the notebook examples to
-produce publication-sized renderings; use ``"low"`` or ``"medium"`` for
+sampling presets. The notebook uses ``resolution="high"`` for several
+figures and ``"medium"`` for Mollweide and vector plots. Use ``"low"`` for
 quicker previews.
 
 .. code-block:: python
 
    from pathlib import Path
 
-   import healpy as hp
    import matplotlib.colors as mpc
+   import healpy as hp
    import numpy as np
 
    from skyplot import (
@@ -31,22 +32,31 @@ quicker previews.
        mollweide,
        orthographic,
        platecarree,
+       set_theme,
    )
 
    print("Available projections:", AVAILABLE_PROJECTIONS)
    print("Resolution presets:", RESOLUTION_PRESETS)
    print("Base font sizes (points):", FONT_SIZE_PRESETS)
 
-``PlanckLogNorm()`` provides the Planck-style symmetric asinh/logarithmic
+Importing SkyPlot selects the ``modern`` theme. The examples call
+``set_theme`` where the notebook changes themes: ``classic`` for the WCS map,
+``academic`` for Equidistant Conic, ``modern`` for the other dust-map views,
+and ``classic_dark`` for the CMB map. Each plot passes ``cmap`` explicitly,
+so the theme controls the fonts, background, gridlines, and other Matplotlib
+settings. See :doc:`themes` for theme defaults and customization.
+
+``PlanckLogNorm()`` provides Planck-style symmetric asinh/logarithmic
 normalization. It derives unset limits from the plotted map; pass explicit
-``vmin`` and ``vmax`` when a fixed scale is needed. ``linthresh=10.0`` sets
-the scale of the linear region around zero and can be adjusted.
+``vmin`` and ``vmax`` when a fixed scale is needed. ``linthresh`` sets the
+scale of the linear region around zero. The CMB example below uses a fixed
+range of ``-500`` to ``100000`` with ``linthresh=10``.
 
 Colorbars label only the displayed color limits by default. Other major ticks
 remain visible without labels, and minor ticks are hidden. With
 ``SymLogNorm``, ``norm="symlog"``, or ``PlanckLogNorm``, the visible
 ``-linthresh`` and ``+linthresh`` boundaries are labeled too. Pass
-``colorbar_kwarg={...}`` for Matplotlib colorbar options such as ``ticks``,
+``colorbar_kwargs={...}`` for Matplotlib colorbar options such as ``ticks``,
 ``format``, ``label``, or ``orientation``. Explicit ``ticks`` or ``format``
 use Matplotlib's labels in place of SkyPlot's default labels.
 
@@ -90,12 +100,6 @@ field, ``field=0``.
    print("npix:", hp_map.size, "nside:", hp.get_nside(hp_map))
    print("dtype:", hp_map.dtype)
 
-For example:
-
-.. code-block:: python
-
-   fig = mollweide(hp_map, cmap="planck", norm=PlanckLogNorm(vmin=-1e4, vmax=1e4))
-
 Mollweide full-sky view
 -----------------------
 
@@ -119,24 +123,25 @@ pixels are painted as a translucent overlay. Select this layer solely with
 
    fig = mollweide(
        hp_map,
-       resolution="high",
+       resolution="medium",
        cmap="sunburst",
        norm="symlog",
        vmin=0.0,
        vmax=100.0,
        badcolor=None,
        title="HEALPix map - Mollweide render",
+       colorbar_title=r"MJy s${}^{-1}$",
    )
 
    mollweide(
        mask,
-       resolution="high",
+       resolution="medium",
        ax=fig.ax,
        badcolor=None,
        plot_mode="overlay_mask",
        alpha=0.4,
-       overlay_color="k",
        show_gridlines=False,
+       overlay_color="k",
    )
 
 .. figure:: figures/mollweide.png
@@ -149,11 +154,13 @@ Equidistant Conic regional view
 -------------------------------
 
 Use ``extent`` to select a region and set the conic's center and standard
-parallels through ``projection_kwargs``. Here a ``SymLogNorm`` supplies more
-control than the shorthand ``norm="symlog"``.
+parallels through ``projection_kwargs``. The notebook selects the ``academic``
+theme for this plot, then uses the ``lipari`` colormap and a ``SymLogNorm``
+to show the dust map's range.
 
 .. code-block:: python
 
+   set_theme("academic")
    equidistantconic(
        hp_map,
        projection_kwargs={
@@ -168,6 +175,7 @@ control than the shorthand ``norm="symlog"``.
            linthresh=2.5, linscale=0.35, vmin=0.0, vmax=100.0
        ),
        title="HEALPix map - EquidistantConic regional render",
+       colorbar_title=r"MJy s${}^{-1}$",
    )
 
 .. figure:: figures/equidistantconic.png
@@ -176,92 +184,76 @@ control than the shorthand ``norm="symlog"``.
 
    The notebook's regional Equidistant Conic rendering.
 
-Customization - Dark Mode
--------------------------
+PlanckLogNorm CMB view
+----------------------
 
-SkyPlot returns a ``PlotResult`` with ``figure`` and ``ax`` attributes. Use Matplotlib's
-``rc_context`` to apply a style locally.  For Cartopy projections, also set
-the ``"geo"`` spine explicitly: it is the map boundary and is separate from
-the normal Matplotlib axes spines.  The colorbar is an additional axes, so its
-spines, ticks, and label need the same foreground color. Here the map is Galactic
-coordinates while the mask is in Celestial coordinates.
+The notebook selects ``classic_dark`` for this NPIPE 143 GHz map and passes
+``planck_log`` as the colormap. Theme examples and dark mode customization
+are on :doc:`themes`. The map is stored in Galactic coordinates and displayed
+on an ICRS grid. The mask is supplied on the same grid as the display.
 
-``PlanckLogNorm`` provides the Planck-style symmetric asinh/logarithmic
-color scaling. With no limits, it takes ``vmin`` and ``vmax`` from the plotted
-map. This example instead sets a fixed symmetric scale inside the norm, which
-is useful when comparing maps; do not also pass top-level ``vmin`` or
-``vmax``. ``linthresh`` controls the width of the near-zero linear region.
+``PlanckLogNorm`` stretches values near zero while retaining the large
+positive range. The notebook sets ``vmin=-500``, ``vmax=100000``, and
+``linthresh=10`` inside the norm. Do not also pass top-level ``vmin`` or
+``vmax``. With no limits, the norm takes them from the plotted map.
+
+The notebook loads the NPIPE temperature field, subtracts the CMB dipole and
+quadrupole, converts to microkelvin, and resamples a southern mask before
+plotting. Replace the paths below with your data files.
 
 .. code-block:: python
 
-   import matplotlib.pyplot as plt
+   npipe_143 = hp.read_map("path/to/npipe_143_map.fits", field=[0, 1, 2])
+   nside = hp.get_nside(npipe_143)
+   dipole = hp.ud_grade(hp.read_map("path/to/cmb_dipole.fits"), nside)
+   quadrupole = hp.ud_grade(hp.read_map("path/to/cmb_quadrupole.fits"), nside)
+   npipe_143[0] -= dipole + quadrupole
+   npipe_143 *= 1e6
 
-   with plt.rc_context({
-       "figure.facecolor": "#101820",
-       "axes.facecolor": "#101820",
-       "axes.edgecolor": "white",
-       "text.color": "white",
-       "axes.labelcolor": "white",
-       "xtick.color": "white",
-       "ytick.color": "white",
-       "font.size": 10,
-       "font.family": "serif",
-       "font.serif": ["STIX Two Text"],
-       "mathtext.fontset": "stix",
-   }):
-       fig = equidistantconic(
-           npipe_143[0],
-           projection_kwargs={
-               "central_longitude": 15.0,
-               "central_latitude": -45.0,
-               "standard_parallels": (-70.0, -15.0),
-           },
-           extent=(-90.0, 120.0, -65.0, -5.0),
-           coordinate_transform=('galactic', 'icrs'),
-           resolution="high",
-           cmap="planck_log",
-           norm=PlanckLogNorm(vmin=-300.0, vmax=300.0, linthresh=10.0),
-           title="NPIPE CMB map at 143 GHz",
-           gridline_kwargs={"linewidth": 0.4, "color": "white", "linestyle": "-"},
-           colorbar_title=r"$\mu$K${}_{\rm CMB}$",
-       )
+   mask = hp.read_map("path/to/south_mask.fits")
+   mask = hp.ud_grade(mask, nside_out=nside)
 
-       map_ax = fig.ax
-       map_ax.spines["geo"].set_edgecolor("white")
-       map_ax.spines["geo"].set_linewidth(0.8)
+   set_theme("classic_dark")
+   fig = equidistantconic(
+       npipe_143[0],
+       projection_kwargs={
+           "central_longitude": 15.0,
+           "central_latitude": -45.0,
+           "standard_parallels": (-70.0, -15.0),
+       },
+       extent=(-90.0, 120.0, -65.0, -5.0),
+       coordinate_transform=("galactic", "icrs"),
+       cmap="planck_log",
+       norm=PlanckLogNorm(linthresh=10.0, vmin=-500.0, vmax=100000.0),
+       title="NPIPE CMB map at 143 GHz",
+       gridline_kwargs={"linewidth": 0.4, "color": "w", "linestyle": "-"},
+       colorbar_title=r"$\mu$K${}_{\rm CMB}$",
+   )
 
-       cbar_ax = fig.axes[-1]
-       for spine in cbar_ax.spines.values():
-           spine.set_edgecolor("white")
-           spine.set_linewidth(0.8)
-       cbar_ax.tick_params(colors="white")
-       cbar_ax.xaxis.label.set_color("white")
+   equidistantconic(
+       mask,
+       plot_mode="overlay_mask",
+       overlay_color="k",
+       alpha=0.4,
+       ax=fig.ax,
+   )
 
-       equidistantconic(
-           mask,
-           resolution="high",
-           plot_mode="overlay_mask",
-           overlay_color="black",
-           alpha=0.4,
-           ax=map_ax,
-           coordinate_transform=("icrs", "icrs"),
-       )
-
-.. figure:: figures/dark_mode.png
-   :alt: Dark-themed Equidistant Conic CMB map with a translucent mask overlay.
+.. figure:: figures/plancklognorm.png
+   :alt: NPIPE CMB map shown with PlanckLogNorm scaling and a translucent southern mask.
    :width: 100%
 
-   Equidistant Conic rendering styled with a local Matplotlib dark theme.
+   The NPIPE map with ``PlanckLogNorm`` and the notebook's ``classic_dark`` theme.
 
 Orthographic view
 -----------------
 
 An Orthographic projection presents the sky as viewed from outside a globe.
 Choose the displayed hemisphere with ``central_longitude`` and
-``central_latitude``.
+``central_latitude``. The notebook returns to the ``modern`` theme here.
 
 .. code-block:: python
 
+   set_theme("modern")
    orthographic(
        hp_map,
        resolution="high",
@@ -276,6 +268,7 @@ Choose the displayed hemisphere with ``central_longitude`` and
        ),
        badcolor=None,
        title="HEALPix map - Orthographic render",
+       colorbar_title=r"MJy s${}^{-1}$",
    )
 
 .. figure:: figures/orthographic.png
@@ -306,6 +299,8 @@ use Astropy frame strings such as ``"galactic"``, ``"icrs"``, and
        badcolor=None,
        gridline_kwargs={"linewidth": 0.2, "color": "w", "linestyle": ":"},
        title="HEALPix map - PlateCarree regional render",
+       figsize=(12, 4),
+       colorbar_title=r"MJy s${}^{-1}$",
    )
 
 .. figure:: figures/platecarree.png
@@ -319,7 +314,8 @@ WCS-backed maps
 
 SkyPlot also accepts a two-dimensional array with an Astropy WCS. The
 notebook example starts from a three-axis CO cube whose WCS has the following
-world-axis order:
+world-axis order. It selects the ``classic`` theme and overrides its default
+colormap with ``cet_l_worb``.
 
 .. code-block:: text
 
@@ -354,18 +350,17 @@ WCS and cube to the desired plane before plotting.
 
 .. code-block:: python
 
+   set_theme("classic")
    platecarree(
        vel_inted_data,
        extent=(-180.0, 180.0, -80.0, 80.0),
-       resolution="high",
-       cmap="amethyst",
+       cmap="cet_l_worb",
        wcs=wcs,
        world_axis_mapping=(1, 2),
        badcolor=None,
-       norm=mpc.SymLogNorm(linthresh=1.0, linscale=1.0, vmin=0.0, vmax=50.0),
-       gridline_kwargs={"linewidth": 0.2, "color": "w", "linestyle": ":"},
+       norm=mpc.SymLogNorm(linthresh=3.0, linscale=1.0, vmin=0.0, vmax=50.0),
        title="WCS map - PlateCarree regional render",
-       colorbar_title="Galactic CO (velocity integrated) in K km/s",
+       colorbar_title=r"Galactic CO (velocity integrated) in K km s${}^{-1}$",
    )
 
 The source WCS longitude pixels span ``-60°`` to ``300°`` and therefore have
@@ -391,23 +386,24 @@ longitude and latitude in degrees, while ``xsize``, ``ysize``, and
 ``pixel_size_arcmin`` set the output sampling. The x-axis records the plot
 center; the y-axis records patch dimensions and pixel size in arcminutes.
 Optional curved, unlabeled longitude/latitude graticules can be enabled with
-``show_gridlines=True`` and styled with ``gridline_kwargs``.
+``show_gridlines=True`` and styled with ``gridline_kwargs``. The notebook
+keeps gridlines off and uses ``1.2`` arcminutes per pixel.
 
 .. code-block:: python
 
+   set_theme("modern")
    gnomonic(
        hp_map,
        center=(0.0, 90.0),
        xsize=1000,
        ysize=1000,
-       pixel_size_arcmin=5.0,
+       pixel_size_arcmin=1.2,
        cmap="balance",
        vmin=0.0,
        vmax=5.0,
        title="HEALPix map - Gnomonic regional render",
-       show_gridlines=True,
-       gridline_kwargs={"color": "white", "linestyle": ":", "alpha": 0.5},
        figsize=(5.5, 6.5),
+       colorbar_title=r"MJy s${}^{-1}$",
    )
 
 .. figure:: figures/gnomonic.png
@@ -425,7 +421,7 @@ map call first, then pass ``ax=fig.ax`` for the overlay. Scalar map
 arguments (``cmap``, ``vmin``, ``vmax``, and ``norm``) are ignored by the
 overlay; configure the artist through ``vector_kwargs``.
 
-For CMB polarization, the first and second input maps are the **east** and
+For dust polarization, the first and second input maps are the **east** and
 **north** components of the director field, not the input Stokes ``U`` map.
 The following notebook-derived snippet follows the **HEALPix/COSMO**
 polarization convention:
@@ -439,9 +435,10 @@ polarization convention:
    east_component = np.sin(psi)       # HEALPix e_phi
    north_component = -np.cos(psi)     # negative HEALPix e_theta
 
+   set_theme("modern")
    vector_fig = mollweide(
        P,
-       cmap="lipari",
+       cmap="thermal",
        norm=mpc.SymLogNorm(linthresh=0.01, linscale=1.0, vmin=0.0, vmax=1.0),
        colorbar_title="Polarized intensity P",
        resolution="medium",
@@ -477,6 +474,7 @@ control their appearance.
            "density": 3.,
        },
        resolution="medium",
+       alpha=0.7,
    )
 
 .. figure:: figures/streamplot.png
@@ -489,36 +487,51 @@ Quiver
 ~~~~~~
 
 Use quiver for discrete vectors when controlled sampling is preferable to
-continuous paths. Create a fresh magnitude figure when comparing it directly
-with a streamplot result.
+continuous paths. The notebook creates a separate Equidistant Conic magnitude
+map in ICRS coordinates and overlays Galactic polarization directions on it.
+``LogNorm`` emphasizes the faint polarized signal; the vector options set
+quiver density and remove arrowheads for this orientation field.
 
 .. code-block:: python
 
-   vector_fig = mollweide(
-      P,
-      cmap="lipari",
-      norm=mpc.SymLogNorm(linthresh=0.01, linscale=1., vmin=0., vmax=1.),
-      colorbar_title="Polarized intensity P",
-      resolution="medium",
-      title="HEALPix polarization orientation",
+   conic_projection = {
+       "central_longitude": 15.0,
+       "central_latitude": -45.0,
+       "standard_parallels": (-70.0, -15.0),
+   }
+   conic_extent = (-90.0, 120.0, -65.0, -5.0)
+
+   vector_fig = equidistantconic(
+       P,
+       projection_kwargs=conic_projection,
+       extent=conic_extent,
+       coordinate_transform=("galactic", "icrs"),
+       cmap="lipari",
+       norm=mpc.LogNorm(vmin=1e-3, vmax=1.0),
+       colorbar_title="Polarized intensity P",
+       title="HEALPix polarization orientation",
    )
-   mollweide(
-      (east_component, north_component),
-      ax=vector_fig.ax,
-      plot_mode="vector_field",
-      vector_kwargs={
-         "method": "quiver",
-         "color": "white",
-         "width": 0.005,
-         "headwidth": 0.,
-         "minshaft": 3.0,
-         "alpha": 0.6,
-      },
-      resolution="medium",
+   equidistantconic(
+       (east_component, north_component),
+       projection_kwargs=conic_projection,
+       extent=conic_extent,
+       coordinate_transform=("galactic", "icrs"),
+       ax=vector_fig.ax,
+       plot_mode="vector_field",
+       vector_kwargs={
+           "method": "quiver",
+           "color": "white",
+           "scale": 40.0,
+           "scale_units": "height",
+           "width": 0.005,
+           "headwidth": 0.0,
+           "minshaft": 2.5,
+           "alpha": 0.8,
+       },
    )
 
 .. figure:: figures/quiver.png
-   :alt: Polarized intensity map with a white quiver overlay.
+   :alt: Equidistant Conic polarized intensity map with a white quiver overlay.
    :width: 100%
 
    Quiver representation of the polarization direction field.
@@ -533,16 +546,16 @@ Saving a figure
 Each plotting function returns a ``PlotResult``. Its ``figure`` is the
 Matplotlib figure and its ``ax`` is the map axes. In a notebook, a bare plot
 call displays one image through Matplotlib's inline backend. The figure stays
-open, so ``plt.savefig(...)`` saves it while it is pyplot's current figure;
-``fig.figure.savefig(...)`` always saves this specific plot. Pass Matplotlib
+open, and ``fig.figure.savefig(...)`` saves that specific plot. Pass Matplotlib
 export options such as ``dpi`` and ``bbox_inches`` to ``savefig``. Use
 ``bbox_inches="tight"`` when exporting titles or other artists near the figure
 edge; ``pad_inches`` only applies with that option.
 
 .. code-block:: python
 
+   fig = mollweide(hp_map, cmap="sunburst", norm="symlog", vmin=0, vmax=100)
    fig.figure.savefig("simulated_sky.png", dpi=300, bbox_inches="tight", pad_inches=0.2)
 
    # Add another layer to the same map.
-   mollweide(allowed_mask, ax=fig.ax, plot_mode="overlay_mask", alpha=0.35)
+   mollweide(mask, ax=fig.ax, plot_mode="overlay_mask", alpha=0.35)
    fig.figure.savefig("sky_with_mask.png", bbox_inches="tight", pad_inches=0.2)

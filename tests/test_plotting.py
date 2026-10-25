@@ -9,7 +9,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import numpy as np
 import pytest
 from astropy.wcs import WCS
-from matplotlib.colors import SymLogNorm, to_rgba
+from matplotlib.colors import LogNorm, SymLogNorm, to_rgba
 import skyplot.plotlib as plotlib
 import skyplot.plotting as plotting
 from skyplot.result import PlotResult
@@ -202,7 +202,8 @@ def test_wcs_sampling_infers_reversed_ra_dec_world_axis_order() -> None:
         world_axis_mapping=None,
     )
 
-    assert np.array_equal(wcs.last_world, [[2.0, 1.0]])
+    # The sampler tries the requested longitude and its two 360-degree aliases.
+    assert np.array_equal(wcs.last_world, [[2.0, 1.0], [2.0, 361.0], [2.0, -359.0]])
     assert values[0, 0] == 11.0
 
 
@@ -501,7 +502,10 @@ def test_extent_none_keeps_wcs_map_global() -> None:
     )
 
     payload = getattr(fig, "_skyplot_payload")
-    assert payload["extent"] == pytest.approx([-180.0, 180.0, -90.0, 90.0])
+    assert payload["extent"] is None
+    assert fig.ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
+        [-180.0, 180.0, -90.0, 90.0]
+    )
 
 
 def test_extent_auto_uses_global_extent_for_healpix_map() -> None:
@@ -1016,11 +1020,53 @@ def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> No
     for value in expected:
         matches = np.flatnonzero(np.isclose(ticks, value))
         assert len(matches) == 1
-        assert labels[matches[0]] == f"{value:g}"
+        if norm_kind != "linear" and abs(value) == 100:
+            assert labels[matches[0]] == (
+                r"$-1\times10^{2}$" if value < 0 else r"$1\times10^{2}$"
+            )
+        else:
+            assert labels[matches[0]] == f"{value:g}"
     for tick, label in zip(ticks, labels):
         if not np.any(np.isclose(tick, expected)):
             assert label == ""
     assert colorbar_ax.xaxis.get_minorticklocs().size == 0
+
+
+@pytest.mark.parametrize("plotter", [mollweide, gnomonic])
+@pytest.mark.parametrize("norm", [LogNorm(vmin=1.0, vmax=5000.0), "log"])
+def test_log_colorbar_uses_scientific_labels(plotter, norm) -> None:
+    hp_map = np.geomspace(1.0, 5000.0, hp.nside2npix(2))
+    options = {"norm": norm, "n_theta": 12, "n_phi": 24, "show_gridlines": False}
+    if norm == "log":
+        options.update(vmin=1.0, vmax=5000.0)
+    fig = plotter(hp_map, **options)
+    fig.canvas.draw()
+    colorbar_ax = fig.axes[-1]
+    ticks = colorbar_ax.get_xticks()
+    labels = [label.get_text() for label in colorbar_ax.get_xticklabels()]
+    for value, expected in ((1.0, r"$1\times10^{0}$"), (5000.0, r"$5\times10^{3}$")):
+        matches = np.flatnonzero(np.isclose(ticks, value))
+        assert len(matches) == 1
+        assert labels[matches[0]] == expected
+
+
+def test_symlog_colorbar_formats_only_log_range() -> None:
+    hp_map = np.linspace(-5000.0, 5000.0, hp.nside2npix(2))
+    fig = mollweide(
+        hp_map, norm=SymLogNorm(linthresh=10.0, vmin=-5000.0, vmax=5000.0),
+        n_theta=12, n_phi=24, show_gridlines=False,
+    )
+    fig.canvas.draw()
+    colorbar_ax = fig.axes[-1]
+    ticks = colorbar_ax.get_xticks()
+    labels = [label.get_text() for label in colorbar_ax.get_xticklabels()]
+    for value, expected in (
+        (-5000.0, r"$-5\times10^{3}$"), (-10.0, "-10"),
+        (10.0, "10"), (5000.0, r"$5\times10^{3}$"),
+    ):
+        matches = np.flatnonzero(np.isclose(ticks, value))
+        assert len(matches) == 1
+        assert labels[matches[0]] == expected
 
 
 @pytest.mark.parametrize(
@@ -1031,7 +1077,7 @@ def test_colorbar_kwarg_passes_matplotlib_options(plotter) -> None:
     fig = plotter(
         hp_map, n_theta=12, n_phi=24, show_gridlines=False,
         vmin=-1.0, vmax=1.0,
-        colorbar_kwarg={
+        colorbar_kwargs={
             "orientation": "vertical", "ticks": [-1.0, 0.0, 1.0],
             "format": "%.1f", "label": "Custom units",
         },
@@ -1051,7 +1097,7 @@ def test_colorbar_kwarg_location_can_set_orientation() -> None:
     hp_map = np.linspace(0.0, 1.0, hp.nside2npix(2))
     fig = mollweide(
         hp_map, n_theta=12, n_phi=24, show_gridlines=False,
-        colorbar_kwarg={"location": "right"},
+        colorbar_kwargs={"location": "right"},
     )
 
     assert fig._skyplot_payload["colorbar_orientation"] == "vertical"
@@ -1435,7 +1481,7 @@ def test_projection_kwargs_passthrough_to_cartopy() -> None:
             hp_map,
             n_theta=8,
             n_phi=16,
-            projection_kwargs={"not_a_real_kwarg": 1},
+            projection_kwargs={"not_a_real_kwargs": 1},
         )
 
 

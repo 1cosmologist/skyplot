@@ -67,7 +67,7 @@ linear-region scale around zero.
 Colorbars label only the two color limits by default. Other major ticks remain
 visible without labels, and minor ticks are hidden. With symmetric log or
 `PlanckLogNorm`, the visible boundaries of the linear region at `±linthresh`
-are labeled too. Pass `colorbar_kwarg={...}` to forward Matplotlib colorbar
+are labeled too. Pass `colorbar_kwargs={...}` to forward Matplotlib colorbar
 options such as `ticks`, `format`, `label`, or `orientation`.
 
 Plotting uses nearest-pixel sampling by default (`interpolate=False`) and
@@ -178,6 +178,8 @@ applied with `plt.rc_context(...)`; Cartopy map boundaries use the separate
 `"geo"` spine and can be styled through `fig.ax.spines["geo"]`.
 See the [customization guide](https://skyplot.readthedocs.io/en/latest/usage.html)
 for a complete example, including colorbar styling.
+The [theme showcase notebook](notebooks/theme_showcase.ipynb) compares the same
+map in all six themes and demonstrates per-plot and Matplotlib overrides.
 
 ## Development
 

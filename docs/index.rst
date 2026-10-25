@@ -73,5 +73,6 @@ range as :math:`({\rm longitude} - 360^\circ)`. This is more suitable for passin
    :caption: Contents
 
    usage
+   themes
    api
 
