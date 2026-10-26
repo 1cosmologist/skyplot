@@ -883,11 +883,43 @@ def _gnomonic_inverse(
 
 def _validate_plot_mode(plot_mode: str) -> str:
     """Validate and return a supported rendering mode."""
-    if plot_mode not in {"map", "overlay_mask", "vector_field"}:
+    if plot_mode not in {"map", "overlay_mask", "vector_field", "annotation"}:
         raise ValueError(
-            "plot_mode must be one of: 'map', 'overlay_mask', or 'vector_field'."
+            "plot_mode must be one of: 'map', 'overlay_mask', 'vector_field', or 'annotation'."
         )
     return plot_mode
+
+
+def _resolve_annotation(
+    annotation: Any, annotate_kwargs: dict[str, Any] | None,
+    *, alpha: float | None, zorder: float | None,
+) -> tuple[str, tuple[float, float], dict[str, Any]]:
+    """Validate a sky annotation and return its position and style."""
+    if not isinstance(annotation, tuple) or len(annotation) != 3:
+        raise ValueError("plot_mode='annotation' requires a (lon, lat, text) tuple.")
+    lon, lat, text = annotation
+    if not isinstance(text, str):
+        raise ValueError("plot_mode='annotation' requires text to be a string.")
+    try:
+        xy = (float(lon), float(lat))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Annotation coordinates must be finite numbers.") from exc
+    if not np.isfinite(xy).all():
+        raise ValueError("Annotation coordinates must be finite numbers.")
+    if abs(xy[1]) > 90.0:
+        raise ValueError("Annotation latitude must be within [-90, 90].")
+    if annotate_kwargs is not None and not isinstance(annotate_kwargs, dict):
+        raise ValueError("annotate_kwargs must be a dict.")
+    style = {} if annotate_kwargs is None else dict(annotate_kwargs)
+    if {"xy", "text", "xycoords"} & style.keys():
+        raise ValueError("annotate_kwargs cannot override annotation coordinates or text.")
+    if alpha is not None:
+        style["alpha"] = alpha
+    if zorder is not None:
+        style["zorder"] = zorder
+    style.setdefault("zorder", 4.0)
+    style.setdefault("clip_on", True)
+    return text, xy, style
 
 
 def _resolve_vector_maps(
@@ -1068,7 +1100,7 @@ def plot_with_projection(
     colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     gridline_adder: Callable[..., Any] | None = None,
     overlay_color: Any = "k",
     alpha: float | None = None,
@@ -1077,6 +1109,7 @@ def plot_with_projection(
     mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -1161,12 +1194,14 @@ def plot_with_projection(
     gridline_adder : callable or None, default=None
         Function that adds Cartopy gridlines. Required when
         ``show_gridlines=True`` for direct low-level use.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Rendering mode. ``"vector_field"`` accepts a ``(U, V)`` pair of
         HEALPix maps or WCS-backed arrays and draws only a transparent vector
         overlay. Draw its magnitude in a separate ``plot_mode="map"`` call
         before passing that figure's axes here. Scalar color-scale arguments
         are ignored.
+        ``"annotation"`` takes ``(lon, lat, text)`` as ``map_data`` on
+        existing axes. The position is in display-frame degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -1186,6 +1221,9 @@ def plot_with_projection(
     vector_kwargs : dict or None, default=None
         Options passed to the vector artist when ``plot_mode="vector_field"``.
         ``method`` selects ``"streamplot"`` (default) or ``"quiver"``.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, alignment, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -1222,6 +1260,21 @@ def plot_with_projection(
     font_size = _font_size_for_resolution(resolution)
 
     plot_mode = _validate_plot_mode(plot_mode)
+    if plot_mode == "annotation":
+        if ax is None:
+            raise ValueError("plot_mode='annotation' requires ax= from an existing map.")
+        label, xy, style = _resolve_annotation(
+            map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
+        )
+        sky_coords = _get_cartopy_crs_module().PlateCarree()._as_mpl_transform(ax)
+        style.setdefault("textcoords", sky_coords)
+        ax.annotate(label, xy=xy, xycoords=sky_coords, **style)
+        previous = getattr(ax.figure, "_skyplot_payload", {})
+        ax.figure._skyplot_payload = {  # type: ignore[attr-defined]
+            **previous, "plot_mode": "annotation",
+            "annotation": {"text": label, "lon": xy[0], "lat": xy[1]},
+        }
+        return PlotResult(ax.figure, ax)
     is_overlay_mask = plot_mode == "overlay_mask"
     vector_field = plot_mode == "vector_field"
     if vector_field and ax is None:

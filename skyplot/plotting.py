@@ -113,6 +113,20 @@ def _gnomonic_grid_spacing(span_deg: float) -> float:
     return float(candidates[np.argmin(np.abs(np.log(candidates / target)))])
 
 
+def _gnomonic_forward(
+    lon_deg: float, lat_deg: float, lon0_deg: float, lat0_deg: float,
+) -> tuple[float, float]:
+    """Project a sky position to the gnomonic axes' arcminute coordinates."""
+    lon, lat, lon0, lat0 = np.radians([lon_deg, lat_deg, lon0_deg, lat0_deg])
+    delta_lon = (lon - lon0 + np.pi) % (2.0 * np.pi) - np.pi
+    cos_c = np.sin(lat0) * np.sin(lat) + np.cos(lat0) * np.cos(lat) * np.cos(delta_lon)
+    if cos_c <= 0.0:
+        raise ValueError("Annotation position is outside the gnomonic hemisphere.")
+    x = np.cos(lat) * np.sin(delta_lon) / cos_c
+    y = (np.cos(lat0) * np.sin(lat) - np.sin(lat0) * np.cos(lat) * np.cos(delta_lon)) / cos_c
+    return float(np.degrees(x) * 60.0), float(np.degrees(y) * 60.0)
+
+
 def _add_gnomonic_gridlines(
     ax: Any,
     *,
@@ -177,7 +191,7 @@ def mollweide(
     colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -185,6 +199,7 @@ def mollweide(
     mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -241,10 +256,13 @@ def mollweide(
         Axes title.
     show_gridlines : bool, default=True
         Draw Cartopy gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -265,6 +283,9 @@ def mollweide(
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. ``cmap``, ``vmin``,
         ``vmax``, and ``norm`` are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -288,6 +309,7 @@ def mollweide(
         gridline_kwargs=gridline_kwargs, mesh_method=mesh_method,
         pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
 
@@ -316,7 +338,7 @@ def orthographic(
     colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -324,6 +346,7 @@ def orthographic(
     mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
@@ -377,10 +400,13 @@ def orthographic(
         Optional axes title.
     show_gridlines : bool, default=True
         Draw geographic gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -401,6 +427,9 @@ def orthographic(
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(5.5, 6.5)
@@ -424,6 +453,7 @@ def orthographic(
         gridline_kwargs=gridline_kwargs, mesh_method=mesh_method,
         pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
 
@@ -453,7 +483,7 @@ def platecarree(
     colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -461,6 +491,7 @@ def platecarree(
     mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -519,10 +550,13 @@ def platecarree(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -543,6 +577,9 @@ def platecarree(
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -568,6 +605,7 @@ def platecarree(
         mesh_method=mesh_method, pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         figsize=figsize, dpi=dpi,
     )
 
@@ -597,7 +635,7 @@ def equidistantconic(
     colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -605,6 +643,7 @@ def equidistantconic(
     mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
@@ -664,10 +703,13 @@ def equidistantconic(
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -688,6 +730,9 @@ def equidistantconic(
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -727,6 +772,7 @@ def equidistantconic(
         mesh_method=mesh_method, pcolormesh_kwargs=pcolormesh_kwargs,
         add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         figsize=figsize, dpi=dpi,
     )
 
@@ -757,7 +803,7 @@ def gnomonic(
     show_gridlines: bool = False,
     gridline_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -766,6 +812,7 @@ def gnomonic(
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
 ) -> PlotResult:
     """Plot a local gnomonic view using Matplotlib.
 
@@ -816,13 +863,19 @@ def gnomonic(
     gridline_kwargs : dict or None, default=None
         Matplotlib contour-style overrides for gnomonic gridlines, such as
         ``color``, ``linestyle``, ``linewidth``, or ``alpha``.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Use a separate scalar-map call to render vector magnitude.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     alpha : float or None, default=None
@@ -858,8 +911,26 @@ def gnomonic(
     if cmap is None:
         cmap = mpl.rcParams["image.cmap"]
 
-    lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
     plot_mode = _plotlib._validate_plot_mode(plot_mode)
+    if plot_mode == "annotation":
+        if ax is None:
+            raise ValueError("plot_mode='annotation' requires ax= from an existing map.")
+        label, xy, style = _plotlib._resolve_annotation(
+            map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
+        )
+        previous = getattr(ax.figure, "_skyplot_payload", {})
+        if previous.get("projection") == "gnomonic":
+            lon0_deg, lat0_deg = previous["projection_kwargs"]["center"]
+        else:
+            lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
+        anchor = _gnomonic_forward(*xy, lon0_deg, lat0_deg)
+        ax.annotate(label, xy=anchor, **style)
+        ax.figure._skyplot_payload = {  # type: ignore[attr-defined]
+            **previous, "plot_mode": "annotation",
+            "annotation": {"text": label, "lon": xy[0], "lat": xy[1]},
+        }
+        return PlotResult(ax.figure, ax)
+    lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
     is_overlay_mask = plot_mode == "overlay_mask"
     vector_field = plot_mode == "vector_field"
     if vector_field and ax is None:

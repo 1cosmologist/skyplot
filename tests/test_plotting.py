@@ -1175,6 +1175,103 @@ def test_plot_mode_overlay_mask_is_recorded() -> None:
     assert getattr(fig, "_skyplot_payload")["plot_mode"] == "overlay_mask"
 
 
+@pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
+def test_annotation_adds_styled_text_in_display_coordinates(plotter) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = plotter(hp_map, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False)
+    ax = fig.ax
+    image_count = len(ax.images)
+    result = plotter(
+        (12.0, -8.0, "Reference"), ax=ax, plot_mode="annotation",
+        annotate_kwargs={
+            "fontsize": 13, "color": "red", "fontfamily": "serif",
+            "ha": "center", "arrowprops": {"arrowstyle": "->"},
+        },
+        zorder=6.0,
+    )
+
+    assert result.ax is ax
+    assert len(ax.images) == image_count
+    label = ax.texts[-1]
+    assert label.get_text() == "Reference"
+    assert label.get_position() == (12.0, -8.0)
+    assert label.get_fontsize() == 13
+    assert label.get_color() == "red"
+    assert label.get_fontfamily() == ["serif"]
+    assert label.get_ha() == "center"
+    assert label.get_zorder() == 6.0
+    assert label.arrow_patch is not None
+    assert fig._skyplot_payload["plot_mode"] == "annotation"
+
+
+def test_gnomonic_annotation_uses_existing_map_center() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = gnomonic(
+        hp_map, center=(30.0, 20.0), xsize=24, ysize=24,
+        show_gridlines=False, add_colorbar=False,
+    )
+    gnomonic(
+        (30.0, 20.0, "Center"), ax=fig.ax, plot_mode="annotation",
+        annotate_kwargs={"fontsize": 11},
+    )
+    label = fig.ax.texts[-1]
+    assert label.xy == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert label.get_position() == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert label.get_fontsize() == 11
+    assert fig._skyplot_payload["plot_mode"] == "annotation"
+
+
+def test_annotation_accepts_xytext_in_annotate_kwargs() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = platecarree(hp_map, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False)
+    platecarree(
+        (12.0, -8.0, "Offset"), ax=fig.ax, plot_mode="annotation",
+        annotate_kwargs={"xytext": (15.0, -6.0), "arrowprops": {"arrowstyle": "->"}},
+    )
+    label = fig.ax.texts[-1]
+    assert label.xy == (12.0, -8.0)
+    assert label.get_position() == (15.0, -6.0)
+    assert label.arrow_patch is not None
+    fig.canvas.draw()
+
+
+def test_gnomonic_annotation_accepts_matplotlib_textcoords() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = gnomonic(
+        hp_map, center=(30.0, 20.0), xsize=24, ysize=24,
+        show_gridlines=False, add_colorbar=False,
+    )
+    gnomonic(
+        (30.0, 20.0, "Offset"), ax=fig.ax, plot_mode="annotation",
+        annotate_kwargs={"xytext": (8.0, 10.0), "textcoords": "offset points"},
+    )
+    label = fig.ax.texts[-1]
+    assert label.xy == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert label.get_position() == (8.0, 10.0)
+    fig.canvas.draw()
+
+
+def test_annotation_validates_axes_coordinates_and_text() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = mollweide(hp_map, n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False)
+    with pytest.raises(ValueError, match="requires ax="):
+        mollweide((0, 0, "Label"), plot_mode="annotation")
+    with pytest.raises(ValueError, match="requires a .* tuple"):
+        mollweide("Label", ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="requires a .* tuple"):
+        mollweide((0, 0, 1, 1, "Label"), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="text to be a string"):
+        mollweide((0, 0, 123), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="finite numbers"):
+        mollweide((0, float("nan"), "Label"), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="within \[-90, 90\]"):
+        mollweide((0, 91, "Label"), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="outside the gnomonic hemisphere"):
+        gnomonic(
+            (180, 0, "Label"), ax=fig.ax, plot_mode="annotation",
+        )
+
+
 def test_existing_axes_extent_overrides_extent_argument() -> None:
     hp_map = np.ones(hp.nside2npix(8))
     fig, ax = plt.subplots(subplot_kw={"projection": ccrs.PlateCarree()})
