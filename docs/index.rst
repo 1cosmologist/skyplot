@@ -18,8 +18,8 @@ Features
   ndmap-like objects with a ``.wcs`` attribute.
 - Available projections are ``mollweide``, ``orthographic``, ``platecarree``,
   ``equidistantconic``, and ``gnomonic``.
-- Preset sampling densities are ``low=(480, 960)``, ``medium=(720, 1440)``,
-  and ``high=(1440, 2880)``; ``medium`` is the default.
+- Preset sampling densities are ``low=(720, 1440)``, ``medium=(1440, 2880)``,
+  and ``high=(2880, 5760)``; ``medium`` is the default.
 - ``cmap`` accepts Matplotlib colormap names and names from the ``colormaps``
   package. See `colormaps documentation <https://pratiman-91.github.io/colormaps/>`__
   for supported colormaps; ``planck`` and ``planck_log`` are also available.
@@ -73,5 +73,6 @@ range as :math:`({\rm longitude} - 360^\circ)`. This is more suitable for passin
    :caption: Contents
 
    usage
+   themes
    api
 

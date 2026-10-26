@@ -44,12 +44,12 @@ SkyPlot requires Python 3.10 or later.
 import healpy as hp
 import numpy as np
 
-from skyplot import PlanckLogNorm, mollweide, save_figure
+from skyplot import PlanckLogNorm, mollweide
 
 nside = 64
 sky_map = np.random.default_rng(1234).normal(size=hp.nside2npix(nside))
 
-fig = mollweide(
+plot = mollweide(
     sky_map,
     resolution="medium",
     cmap="batlow",
@@ -57,15 +57,18 @@ fig = mollweide(
     colorbar_title=r"$\mu$K",
 )
 
-save_figure(fig, "cmb_map.png", figsize=(12, 6), dpi=300)
+plot.figure.savefig("cmb_map.png", dpi=300, bbox_inches="tight", pad_inches=0.2)
 ```
 
 For the Planck-style symmetric asinh/logarithmic scaling, pass
 `norm=PlanckLogNorm()`. Unset limits are derived from the plotted map; pass
 explicit limits for a fixed shared scale. Use `linthresh=` to adjust the
 linear-region scale around zero.
-Colorbars label both color limits. With symmetric log or `PlanckLogNorm`, they
-also label the visible boundaries of the linear region at `±linthresh`.
+Colorbars label only the two color limits by default. Other major ticks remain
+visible without labels, and minor ticks are hidden. With symmetric log or
+`PlanckLogNorm`, the visible boundaries of the linear region at `±linthresh`
+are labeled too. Pass `colorbar_kwargs={...}` to forward Matplotlib colorbar
+options such as `ticks`, `format`, `label`, or `orientation`.
 
 Plotting uses nearest-pixel sampling by default (`interpolate=False`) and
 makes missing, non-finite, or sentinel-valued samples transparent
@@ -73,15 +76,30 @@ makes missing, non-finite, or sentinel-valued samples transparent
 when a different rendering is desired. For `platecarree` and `equidistantconic`,
 pass `extent="auto"` to infer WCS-map bounds; the same value selects the
 global extent for HEALPix maps. Omitting `extent` keeps the default global view.
-Regional extents also limit the geographic domain sampled by the grid.
+Regional views sample the entire projected viewport, including positions
+beyond the requested geographic extent when a conic projection reveals them.
 
-In a notebook, display a returned figure explicitly:
+Mollweide, Orthographic, Plate Carrée, and Equidistant Conic scalar maps use
+a warped image by default, including opaque maps. Set `mesh_method="mesh"`
+to draw an opaque map with Cartopy's pixel mesh. `pcolormesh_kwargs` applies
+only in mesh mode; use the top-level `alpha`, `zorder`, and color arguments
+with the default image mode. Gnomonic maps already use an image.
+
+In a notebook, a bare plotting call displays one image at the end of the cell.
+SkyPlot returns a `PlotResult` with `.figure` (the Matplotlib figure) and
+`.ax` (the map axes). The figure stays registered with pyplot, so you can
+add layers or save it later:
 
 ```python
-from IPython.display import display
+import matplotlib.pyplot as plt
 
-display(fig)
+plot = mollweide(sky_map)
+plt.savefig("sky.png")  # saves pyplot's current figure
+plot.figure.savefig("sky.png")  # saves this specific figure
 ```
+
+If another figure has become current, use `plot.figure.savefig(...)` to target
+this plot.
 
 ## Layers: masks and vector fields
 
@@ -106,7 +124,7 @@ north = -np.cos(psi)
 
 mollweide(
     (east, north),
-    ax=fig.axes[0],
+    ax=fig.ax,
     plot_mode="vector_field",
     vector_kwargs={
         "method": "streamplot",  # or "quiver"
@@ -128,7 +146,7 @@ To overlay the invalid region of a binary allowed-pixel mask:
 ```python
 mollweide(
     allowed_mask,
-    ax=fig.axes[0],
+    ax=fig.ax,
     plot_mode="overlay_mask",
     overlay_color="black",
     alpha=0.35,
@@ -154,12 +172,14 @@ fig = mollweide(
 
 ## Styling
 
-SkyPlot returns standard Matplotlib figures, so use Matplotlib configuration
+SkyPlot returns a `PlotResult` containing a standard Matplotlib figure, so use Matplotlib configuration
 and normal artist customization. For example, a local dark style can be
 applied with `plt.rc_context(...)`; Cartopy map boundaries use the separate
-`"geo"` spine and can be styled through `fig.axes[0].spines["geo"]`.
+`"geo"` spine and can be styled through `fig.ax.spines["geo"]`.
 See the [customization guide](https://skyplot.readthedocs.io/en/latest/usage.html)
 for a complete example, including colorbar styling.
+The [theme showcase notebook](notebooks/theme_showcase.ipynb) compares the same
+map in all six themes and demonstrates per-plot and Matplotlib overrides.
 
 ## Development
 

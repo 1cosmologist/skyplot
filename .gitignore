@@ -43,6 +43,7 @@ skyplot/__pycache__/
 .cache/
 *.tmp
 *.ipynb
+!notebooks/theme_showcase.ipynb
 
 PROJECT_CONTEXT.md
 REVIEW_ISSUES.md

@@ -27,16 +27,18 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any, Callable, Literal, Sequence
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
-from matplotlib.colors import Colormap, ListedColormap, Normalize, SymLogNorm
+from matplotlib.colors import Colormap, ListedColormap, LogNorm, Normalize, SymLogNorm
 from matplotlib.figure import Figure
-from matplotlib.scale import SymmetricalLogScale
+from matplotlib.scale import LogScale, SymmetricalLogScale
 
 from importlib import resources
 
 from .sampling import make_theta_phi_grid, sample_at_angles
+from .result import PlotResult
 
 _SUPPORTED_PROJECTIONS_ORDER = (
     "mollweide",
@@ -60,9 +62,9 @@ def _get_cartopy_crs_module() -> Any:
 AVAILABLE_PROJECTIONS = _SUPPORTED_PROJECTIONS_ORDER
 
 RESOLUTION_PRESETS: dict[str, tuple[int, int]] = {
-    "low": (480, 960),
-    "medium": (720, 1440),
-    "high": (1440, 2880),
+    "low": (720, 1440),
+    "medium": (1440, 2880),
+    "high": (2880, 5760),
 }
 
 # Font sizes are in typographic points.  They are deliberately larger than
@@ -79,14 +81,6 @@ DPI_PRESETS: dict[str, int] = {
     "medium": 200,
     "high": 300,
 }
-
-_last_figure: Figure | None = None
-
-
-def _get_last_figure() -> Figure | None:
-    """Return the most recently created skyplot figure, if any."""
-    return _last_figure
-
 
 def _get_display_grid(
     n_theta: int,
@@ -889,11 +883,49 @@ def _gnomonic_inverse(
 
 def _validate_plot_mode(plot_mode: str) -> str:
     """Validate and return a supported rendering mode."""
-    if plot_mode not in {"map", "overlay_mask", "vector_field"}:
+    if plot_mode not in {"map", "overlay_mask", "vector_field", "annotation"}:
         raise ValueError(
-            "plot_mode must be one of: 'map', 'overlay_mask', or 'vector_field'."
+            "plot_mode must be one of: 'map', 'overlay_mask', 'vector_field', or 'annotation'."
         )
     return plot_mode
+
+
+def _resolve_annotation(
+    annotation: Any, annotate_kwargs: dict[str, Any] | None,
+    *, alpha: float | None, zorder: float | None,
+) -> tuple[str, tuple[float, float], dict[str, Any]]:
+    """Validate a sky annotation and return its position and style."""
+    if not isinstance(annotation, tuple) or len(annotation) != 3:
+        raise ValueError("plot_mode='annotation' requires a (lon, lat, text) tuple.")
+    lon, lat, text = annotation
+    if not isinstance(text, str):
+        raise ValueError("plot_mode='annotation' requires text to be a string.")
+    try:
+        xy = (float(lon), float(lat))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Annotation coordinates must be finite numbers.") from exc
+    if not np.isfinite(xy).all():
+        raise ValueError("Annotation coordinates must be finite numbers.")
+    if abs(xy[1]) > 90.0:
+        raise ValueError("Annotation latitude must be within [-90, 90].")
+    if annotate_kwargs is not None and not isinstance(annotate_kwargs, dict):
+        raise ValueError("annotate_kwargs must be a dict.")
+    style = {} if annotate_kwargs is None else dict(annotate_kwargs)
+    if {"xy", "text", "xycoords"} & style.keys():
+        raise ValueError("annotate_kwargs cannot override annotation coordinates or text.")
+    if alpha is not None:
+        style["alpha"] = alpha
+    if zorder is not None:
+        style["zorder"] = zorder
+    style.setdefault("clip_on", True)
+    return text, xy, style
+
+
+def _annotation_zorder(ax: Any) -> float:
+    """Place a new annotation above the artists already on the axes."""
+    orders = (artist.get_zorder() for artist in ax.get_children())
+    finite_orders = (float(order) for order in orders if order is not None and np.isfinite(order))
+    return max(10.0, max(finite_orders, default=3.0) + 1.0)
 
 
 def _resolve_vector_maps(
@@ -1009,13 +1041,16 @@ def _draw_vector_field(
 
 
 def _set_colorbar_ticks(colorbar: Any) -> None:
-    """Label color limits and, for symmetric log scales, linear boundaries."""
+    """Label limits and linear boundaries, using scientific notation in log ranges."""
     vmin, vmax = float(colorbar.vmin), float(colorbar.vmax)
     ticks = np.asarray(colorbar.get_ticks(), dtype=float)
     ticks = ticks[np.isfinite(ticks) & (ticks >= vmin) & (ticks <= vmax)]
-    required = [vmin, vmax]
+    labeled = [vmin, vmax]
 
     norm = colorbar.norm
+    is_log = isinstance(norm, LogNorm) or isinstance(
+        getattr(norm, "_scale", None), LogScale,
+    )
     if isinstance(norm, SymLogNorm):
         linthresh = norm.linthresh
     elif isinstance(getattr(norm, "_scale", None), SymmetricalLogScale):
@@ -1023,14 +1058,25 @@ def _set_colorbar_ticks(colorbar: Any) -> None:
     else:
         linthresh = getattr(norm, "_skyplot_linthresh", None)
     if linthresh is not None:
-        required.extend((-linthresh, linthresh))
+        labeled.extend((-linthresh, linthresh))
 
-    required_ticks = np.unique(required)
+    required_ticks = np.unique(labeled)
     for value in required_ticks:
         ticks = ticks[~np.isclose(ticks, value, rtol=1e-12, atol=0.0)]
     ticks = np.sort(np.concatenate((ticks, required_ticks)))
     ticks = ticks[(ticks >= vmin) & (ticks <= vmax)]
-    colorbar.set_ticks(ticks, labels=[f"{tick:g}" for tick in ticks])
+    labels = []
+    for tick in ticks:
+        is_labeled = np.any(np.isclose(tick, required_ticks, rtol=1e-12, atol=0.0))
+        if not is_labeled:
+            labels.append("")
+        elif tick != 0 and (is_log or (linthresh is not None and abs(tick) > linthresh)):
+            mantissa, exponent = f"{tick:.6e}".split("e")
+            labels.append(rf"${float(mantissa):g}\times10^{{{int(exponent)}}}$")
+        else:
+            labels.append(f"{tick:g}")
+    colorbar.set_ticks(ticks, labels=labels)
+    colorbar.minorticks_off()
 
 
 def plot_with_projection(
@@ -1045,32 +1091,35 @@ def plot_with_projection(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     gridline_adder: Callable[..., Any] | None = None,
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Render a sampled sky map on a supplied Cartopy projection.
 
     This is the implementation primitive behind the named projection
@@ -1094,8 +1143,8 @@ def plot_with_projection(
         ``extent="auto"`` infers the WCS image footprint for a WCS-backed 2D
         map and selects the global extent for a HEALPix map. ``None`` keeps
         the default global view. For regional Plate Carrée and Equidistant
-        Conic views, the configured sampling grid is generated within the
-        selected extent.
+        Conic views, the sampling grid covers the entire projected viewport,
+        which can extend beyond these geographic bounds for conic views.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -1115,9 +1164,9 @@ def plot_with_projection(
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates axes. Vector mode
         requires axes from a previously rendered magnitude map.
-    n_theta : int, default=720
+    n_theta : int, default=1440
         Colatitude sampling-grid size.
-    n_phi : int, default=1440
+    n_phi : int, default=2880
         Longitude sampling-grid size.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset overriding ``n_theta`` and ``n_phi``. It also uses a 14, 16,
@@ -1127,8 +1176,8 @@ def plot_with_projection(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate samples instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification. ``None`` uses the active theme's default.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -1141,6 +1190,9 @@ def plot_with_projection(
         Mesh color normalization.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwargs : dict or None, default=None
+        Extra keyword arguments passed to Matplotlib ``Figure.colorbar``.
+        Explicit ``ticks`` or ``format`` override SkyPlot's default tick labels.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
@@ -1148,12 +1200,14 @@ def plot_with_projection(
     gridline_adder : callable or None, default=None
         Function that adds Cartopy gridlines. Required when
         ``show_gridlines=True`` for direct low-level use.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Rendering mode. ``"vector_field"`` accepts a ``(U, V)`` pair of
         HEALPix maps or WCS-backed arrays and draws only a transparent vector
         overlay. Draw its magnitude in a separate ``plot_mode="map"`` call
         before passing that figure's axes here. Scalar color-scale arguments
         are ignored.
+        ``"annotation"`` takes ``(lon, lat, text)`` as ``map_data`` on
+        existing axes. The position is in display-frame degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -1161,17 +1215,22 @@ def plot_with_projection(
         omitted; an explicitly supplied value is used unchanged.
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
-        and mask overlays to 3. An explicit value is used unchanged.
+        and mask overlays to 3. Annotations default above all existing axes
+        artists, with a minimum of 10. An explicit value is used unchanged.
     gridline_kwargs : dict or None, default=None
         Gridline option overrides.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
     pcolormesh_kwargs : dict or None, default=None
-        Extra mesh keyword arguments. With map opacity below 1, only
-        ``alpha``, ``rasterized``, and nearest or auto ``shading`` are used
-        because the map is rendered as one warped image. Set drawing order
-        with the top-level ``zorder`` argument.
+        Extra mesh keyword arguments, used only when ``mesh_method="mesh"``.
+        Ignored otherwise. Set drawing order with the top-level ``zorder``.
     vector_kwargs : dict or None, default=None
         Options passed to the vector artist when ``plot_mode="vector_field"``.
         ``method`` selects ``"streamplot"`` (default) or ``"quiver"``.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, alignment, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -1184,13 +1243,18 @@ def plot_with_projection(
 
     Returns
     -------
-    matplotlib.figure.Figure
-        The figure containing the rendered map.
+    skyplot.PlotResult
+        The figure and map axes, available as ``result.figure`` and ``result.ax``.
     """
     if dpi <= 0:
         raise ValueError("dpi must be a positive integer.")
     if len(figsize) != 2 or figsize[0] <= 0.0 or figsize[1] <= 0.0:
         raise ValueError("figsize must be a two-element tuple of positive values.")
+    if mesh_method != "wrap" and mesh_method != "mesh":
+        raise ValueError("mesh_method must be 'wrap' or 'mesh'.")
+
+    if cmap is None:
+        cmap = mpl.rcParams["image.cmap"]
 
     if resolution is not None:
         if resolution not in RESOLUTION_PRESETS:
@@ -1203,6 +1267,22 @@ def plot_with_projection(
     font_size = _font_size_for_resolution(resolution)
 
     plot_mode = _validate_plot_mode(plot_mode)
+    if plot_mode == "annotation":
+        if ax is None:
+            raise ValueError("plot_mode='annotation' requires ax= from an existing map.")
+        label, xy, style = _resolve_annotation(
+            map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
+        )
+        style.setdefault("zorder", _annotation_zorder(ax))
+        sky_coords = _get_cartopy_crs_module().PlateCarree()._as_mpl_transform(ax)
+        style.setdefault("textcoords", sky_coords)
+        ax.annotate(label, xy=xy, xycoords=sky_coords, **style)
+        previous = getattr(ax.figure, "_skyplot_payload", {})
+        ax.figure._skyplot_payload = {  # type: ignore[attr-defined]
+            **previous, "plot_mode": "annotation",
+            "annotation": {"text": label, "lon": xy[0], "lat": xy[1]},
+        }
+        return PlotResult(ax.figure, ax)
     is_overlay_mask = plot_mode == "overlay_mask"
     vector_field = plot_mode == "vector_field"
     if vector_field and ax is None:
@@ -1256,19 +1336,52 @@ def plot_with_projection(
         (0.0, 0.0, 0.0, 0.0) if is_overlay_mask else badcolor,
     )
 
+    supplied_axes = ax is not None
+    if ax is None:
+        map_crs = projection_factory(**projection_kwargs)
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, subplot_kw={"projection": map_crs})
+        if validated_extent is None:
+            ax.set_global()
+        else:
+            ax.set_extent(validated_extent, crs=ccrs.PlateCarree())
+    else:
+        fig = ax.figure
+
+        # An existing axes owns its viewport. In particular, an ``extent``
+        # passed to an overlay must not replace the visible region.
+        validated_extent = tuple(
+            float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
+        )
+
     display_extent = None
-    if projection_name in {"platecarree", "equidistantconic"}:
-        if ax is not None:
-            display_extent = tuple(
-                float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
-            )
-        elif isinstance(validated_extent, tuple):
-            display_extent = validated_extent
+    if projection_name in {"platecarree", "equidistantconic"} and (
+        supplied_axes or isinstance(validated_extent, tuple)
+    ):
+        # A conic projection's rectangular viewport includes geographic
+        # positions outside the longitude/latitude rectangle passed to
+        # set_extent. Ask Cartopy for the full visible geographic bounds.
+        display_extent = tuple(
+            float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
+        )
     lon, lat = _get_display_grid(
         n_theta=n_theta, n_phi=n_phi, extent=display_extent,
     )
-    raster_extent = (-180.0, 180.0, -90.0, 90.0)
-    if display_extent is not None and display_extent != raster_extent:
+    global_extent = (-180.0, 180.0, -90.0, 90.0)
+    full_sky_grid = display_extent is None or display_extent == global_extent
+    if full_sky_grid:
+        # The full-sky longitude grid is periodic: its final sample is one
+        # step before the first sample at the wrap seam. The latitude samples
+        # lie just inside the poles. Imshow needs pixel edges around those
+        # centres and a repeated column at +180 to cover the wrap seam.
+        lon_step = float(lon[0, 1] - lon[0, 0])
+        lat_step = float(lat[1, 0] - lat[0, 0])
+        raster_extent = (
+            float(lon[0, 0] - lon_step / 2),
+            float(lon[0, 0] + 360.0 + lon_step / 2),
+            float(lat[0, 0] - lat_step / 2),
+            float(lat[-1, 0] + lat_step / 2),
+        )
+    else:
         lon_min, lon_max, lat_min, lat_max = display_extent
         lon_pad = (lon_max - lon_min) / (2 * (n_phi - 1)) if n_phi > 1 else 0.0
         lat_pad = (lat_max - lat_min) / (2 * (n_theta - 1)) if n_theta > 1 else 0.0
@@ -1305,24 +1418,6 @@ def plot_with_projection(
     if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
 
-    created_fig = ax is None
-    if ax is None:
-        map_crs = projection_factory(**projection_kwargs)
-        fig, ax = plt.subplots(figsize=figsize, dpi=dpi, subplot_kw={"projection": map_crs})
-        if validated_extent is None:
-            ax.set_global()
-        else:
-            ax.set_extent(validated_extent, crs=ccrs.PlateCarree())
-    else:
-        fig = ax.figure
-
-        # An existing axes owns its viewport.  In particular, an ``extent``
-        # passed for a newly-created axes must not make the metadata claim a
-        # different rendered region when layering onto an existing GeoAxes.
-        validated_extent = tuple(
-            float(value) for value in ax.get_extent(crs=ccrs.PlateCarree())
-        )
-
     if projection_name in {
         "mollweide",
         "orthographic",
@@ -1335,7 +1430,7 @@ def plot_with_projection(
         ax.invert_xaxis()
 
     applied_gridline_kwargs: dict[str, Any] = {
-        "color": "black",
+        "color": mpl.rcParams["grid.color"],
         "linestyle": "-",
         "linewidth": 0.2,
         "lon_gridline_spacing_deg": 30.0,
@@ -1358,7 +1453,7 @@ def plot_with_projection(
         "rasterized": True,
         "alpha": alpha,
     }
-    if pcolormesh_kwargs is not None:
+    if mesh_method == "mesh" and pcolormesh_kwargs is not None:
         mesh_kwargs.update(pcolormesh_kwargs)
     if alpha is not None:
         mesh_kwargs["alpha"] = alpha
@@ -1369,7 +1464,7 @@ def plot_with_projection(
         mesh_kwargs["alpha"] = alpha
 
     mesh_cmap = resolved_cmap
-    if projection_name == "mollweide" and not np.isclose(
+    if mesh_method == "mesh" and projection_name == "mollweide" and not np.isclose(
         float(projection_kwargs.get("central_longitude", 0.0)) % 360.0,
         0.0,
     ):
@@ -1379,21 +1474,12 @@ def plot_with_projection(
         mesh_cmap = resolved_cmap.copy()
         mesh_cmap.set_bad((0.0, 0.0, 0.0, 0.0))
 
-    translucent_map = (
-        plot_mode == "map"
-        and isinstance(mesh_kwargs["alpha"], (int, float, np.floating))
-        and 0.0 <= mesh_kwargs["alpha"] < 1.0
-    )
-    if translucent_map and pcolormesh_kwargs is not None:
-        unsupported = set(pcolormesh_kwargs) - {"alpha", "rasterized", "shading", "zorder"}
-        if unsupported or mesh_kwargs["shading"] not in {"nearest", "auto"}:
-            raise ValueError(
-                "Translucent maps use a warped image; pcolormesh_kwargs may "
-                "set alpha, rasterized, or shading='nearest' or 'auto'. "
-                "Set drawing order with the top-level zorder argument."
-            )
+    if plot_mode == "map" and mesh_method == "mesh":
+        mesh_alpha = mesh_kwargs["alpha"]
+        if isinstance(mesh_alpha, (int, float, np.floating)) and mesh_alpha < 1.0:
+            raise ValueError("mesh_method='mesh' requires an opaque map (alpha=1 or None).")
     quad = None
-    if is_overlay_mask or translucent_map:
+    if is_overlay_mask or (plot_mode == "map" and mesh_method == "wrap"):
         # A transparent projected QuadMesh can be split into overlapping
         # polygons by Cartopy. Its semi-transparent edges then accumulate
         # unevenly, obscuring the map beneath a translucent overlay.
@@ -1401,23 +1487,46 @@ def plot_with_projection(
         # keeps mask regions and translucent map layers visually uniform.
         #
         # ``values`` is on an ascending latitude/longitude centre grid.
-        # Use its pixel boundaries for the image extent.
+        # Use its pixel boundaries for the image extent, repeating the first
+        # column at the full-sky wrap seam. The mesh keeps its original grid.
         # Retain the sampling resolution (or Cartopy's sensible 750-pixel
         # minimum for smaller preview grids) during the warp.
+        image_vmin, image_vmax = vmin, vmax
+        if not is_overlay_mask and (vmin is None or vmax is None):
+            finite_values = np.asarray(values)[np.isfinite(values)]
+            if isinstance(norm, str) and norm == "log":
+                finite_values = finite_values[finite_values > 0]
+            if finite_values.size:
+                if isinstance(norm, Normalize):
+                    norm.autoscale_None(finite_values)
+                else:
+                    if image_vmin is None:
+                        image_vmin = float(finite_values.min())
+                    if image_vmax is None:
+                        image_vmax = float(finite_values.max())
+        image_kwargs: dict[str, Any] = {}
+        source_crs = ccrs.PlateCarree()
+        if ax.projection != source_crs:
+            image_kwargs["regrid_shape"] = max(750, n_theta)
+        if full_sky_grid:
+            concatenate = np.ma.concatenate if np.ma.isMaskedArray(values) else np.concatenate
+            image_values = concatenate((values, values[:, :1]), axis=1)
+        else:
+            image_values = values
         quad = ax.imshow(
-            values,
-            transform=ccrs.PlateCarree(),
+            image_values,
+            transform=source_crs,
             extent=raster_extent,
             origin="lower",
             interpolation="nearest",
-            regrid_shape=max(750, n_theta),
-            rasterized=mesh_kwargs["rasterized"],
+            rasterized=True,
             cmap=mesh_cmap,
-            vmin=vmin,
-            vmax=vmax,
+            vmin=image_vmin,
+            vmax=image_vmax,
             norm=norm,
-            alpha=alpha if is_overlay_mask else mesh_kwargs["alpha"],
+            alpha=alpha,
             zorder=zorder,
+            **image_kwargs,
         )
     elif not vector_field:
         quad = ax.pcolormesh(
@@ -1445,16 +1554,23 @@ def plot_with_projection(
 
     if add_colorbar:
         assert quad is not None
-        cbar = fig.colorbar(
-            quad,
-            ax=ax,
-            orientation="horizontal",
-            pad=0.06,
-            fraction=0.035,
-            aspect=40,
+        colorbar_options: dict[str, Any] = {
+            "ax": ax, "orientation": "horizontal", "pad": 0.06, "fraction": 0.035,
+            "aspect": 40, "label": colorbar_title,
+        }
+        if colorbar_kwargs is not None:
+            colorbar_options.update(colorbar_kwargs)
+            if "location" in colorbar_kwargs and "orientation" not in colorbar_kwargs:
+                colorbar_options.pop("orientation")
+        cbar = fig.colorbar(quad, **colorbar_options)
+        cbar.set_label(colorbar_options["label"], fontsize=font_size)
+        custom_ticks = colorbar_kwargs and (
+            "ticks" in colorbar_kwargs or "format" in colorbar_kwargs
         )
-        cbar.set_label(colorbar_title, fontsize=font_size)
-        _set_colorbar_ticks(cbar)
+        if not custom_ticks:
+            _set_colorbar_ticks(cbar)
+        else:
+            cbar.minorticks_off()
         cbar.ax.tick_params(labelsize=0.85 * font_size)
 
     if title:
@@ -1463,7 +1579,10 @@ def plot_with_projection(
         ax.set_title(title, fontsize=1.02 * font_size)
     ax.tick_params(labelsize=0.85 * font_size)
 
-    fig.tight_layout()
+    # Cartopy's tight layout can place the title just above the canvas, where
+    # a plain savefig() clips it. Reserve a small top margin whenever the axes
+    # has a title, including when an overlay reuses the same figure.
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95) if ax.get_title() else None)
 
 
     fig._skyplot_payload = {  # type: ignore[attr-defined]
@@ -1484,6 +1603,7 @@ def plot_with_projection(
         "title": title,
         "show_gridlines": show_gridlines,
         "plot_mode": plot_mode,
+        "mesh_method": mesh_method,
         "vector_method": vector_method,
         "alpha": alpha,
         "zorder": zorder,
@@ -1492,17 +1612,9 @@ def plot_with_projection(
         "gridline_linewidth": applied_gridline_kwargs["linewidth"],
         "lon_gridline_spacing_deg": applied_gridline_kwargs["lon_gridline_spacing_deg"],
         "lat_gridline_spacing_deg": applied_gridline_kwargs["lat_gridline_spacing_deg"],
-        "colorbar_orientation": "horizontal",
+        "colorbar_orientation": cbar.orientation if add_colorbar else "horizontal",
         "font_size": font_size,
         "dpi": dpi,
     }
 
-    # Prevent matplotlib's Jupyter inline backend from auto-displaying this
-    # figure a second time in addition to the one shown via the return value.
-    if created_fig:
-        plt.close(fig)
-
-    global _last_figure
-    _last_figure = fig
-
-    return fig
+    return PlotResult(fig, ax)

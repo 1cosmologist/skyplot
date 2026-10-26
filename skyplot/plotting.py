@@ -30,11 +30,11 @@ stable, user-facing plotting surface in one small place.
 from typing import Any, Literal, Sequence
 
 import healpy as hp
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 from matplotlib.colors import ListedColormap, Normalize
-from matplotlib.figure import Figure
 
 from . import plotlib as _plotlib
 from .plotlib import (
@@ -53,12 +53,13 @@ from .plotlib import (
     _with_bad_color,
 )
 from .sampling import sample_at_angles
+from .result import PlotResult
 
 
 def add_gridlines(
     ax: Any,
     *,
-    color: str = "black",
+    color: str | None = None,
     linestyle: str = "-",
     linewidth: float = 0.2,
     lon_gridline_spacing_deg: float = 30.0,
@@ -71,8 +72,8 @@ def add_gridlines(
     ----------
     ax : cartopy.mpl.geoaxes.GeoAxes
         Axes receiving the gridlines; required.
-    color : str, default="black"
-        Gridline color.
+    color : str or None, default=None
+        Gridline color. Uses Matplotlib's ``grid.color`` when omitted.
     linestyle : str, default="-"
         Matplotlib gridline style.
     linewidth : float, default=0.2
@@ -91,6 +92,8 @@ def add_gridlines(
     if lat_gridline_spacing_deg <= 0:
         raise ValueError("lat_gridline_spacing_deg must be positive.")
 
+    if color is None:
+        color = mpl.rcParams["grid.color"]
     ccrs = _get_cartopy_crs_module()
     lon_ticks = np.arange(-180.0 + lon_gridline_spacing_deg, 180.0 + 1e-6, lon_gridline_spacing_deg)
     lat_ticks = np.arange(-90.0 + lat_gridline_spacing_deg, 90.0 + 1e-6, lat_gridline_spacing_deg)
@@ -108,6 +111,20 @@ def _gnomonic_grid_spacing(span_deg: float) -> float:
     candidates = np.array([0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0])
     target = max(span_deg / 4.0, candidates[0])
     return float(candidates[np.argmin(np.abs(np.log(candidates / target)))])
+
+
+def _gnomonic_forward(
+    lon_deg: float, lat_deg: float, lon0_deg: float, lat0_deg: float,
+) -> tuple[float, float]:
+    """Project a sky position to the gnomonic axes' arcminute coordinates."""
+    lon, lat, lon0, lat0 = np.radians([lon_deg, lat_deg, lon0_deg, lat0_deg])
+    delta_lon = (lon - lon0 + np.pi) % (2.0 * np.pi) - np.pi
+    cos_c = np.sin(lat0) * np.sin(lat) + np.cos(lat0) * np.cos(lat) * np.cos(delta_lon)
+    if cos_c <= 0.0:
+        raise ValueError("Annotation position is outside the gnomonic hemisphere.")
+    x = np.cos(lat) * np.sin(delta_lon) / cos_c
+    y = (np.cos(lat0) * np.sin(lat) - np.sin(lat0) * np.cos(lat) * np.cos(delta_lon)) / cos_c
+    return float(np.degrees(x) * 60.0), float(np.degrees(y) * 60.0)
 
 
 def _add_gnomonic_gridlines(
@@ -131,7 +148,8 @@ def _add_gnomonic_gridlines(
     lat_levels = np.arange(np.ceil(lat_min / lat_step) * lat_step, lat_max, lat_step)
 
     style: dict[str, Any] = {
-        "colors": "black", "linestyles": "-", "linewidths": 0.2, "alpha": 1.0,
+        "colors": mpl.rcParams["grid.color"], "linestyles": "-", "linewidths": 0.2,
+        "alpha": 1.0,
     }
     if gridline_kwargs is not None:
         style.update(gridline_kwargs)
@@ -158,31 +176,34 @@ def mollweide(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy Mollweide projection.
 
     Parameters
@@ -206,7 +227,7 @@ def mollweide(
         Explicit ``(longitude_axis, latitude_axis)`` WCS world-axis mapping.
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates an axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Colatitude and longitude sampling-grid sizes.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset that overrides ``n_theta`` and ``n_phi`` and selects a larger
@@ -216,8 +237,8 @@ def mollweide(
         Treat a 1D HEALPix map as NEST ordered.
     interpolate : bool, default=False
         Interpolate sampled values instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Matplotlib or ``colormaps`` colormap specification.
+    cmap : str, sequence, or None, default=None
+        Matplotlib or ``colormaps`` colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Input sentinel converted to missing data; ``None`` disables sentinel matching.
     badcolor : color or None, default=None
@@ -226,17 +247,22 @@ def mollweide(
     vmin, vmax : float or None, defaults=None, None
         Optional lower and upper color-scale limits.
     norm : str or matplotlib.colors.Normalize or None, default=None
-        Matplotlib normalization forwarded to ``pcolormesh``.
+        Matplotlib normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Label for the optional colorbar.
+    colorbar_kwargs : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
         Draw Cartopy gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -247,14 +273,19 @@ def mollweide(
         and mask overlays to 3.
     gridline_kwargs : dict or None, default=None
         Overrides for gridline color, style, width, spacing, or opacity.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
     pcolormesh_kwargs : dict or None, default=None
-        Extra mesh options. For maps with ``alpha < 1``, only ``alpha``,
-        ``rasterized``, and nearest or auto ``shading`` are used. Set drawing
-        order with the top-level ``zorder`` argument.
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. ``cmap``, ``vmin``,
         ``vmax``, and ``norm`` are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -270,12 +301,15 @@ def mollweide(
         world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta, n_phi=n_phi,
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
-        colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
+        colorbar_title=colorbar_title, colorbar_kwargs=colorbar_kwargs,
+        title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
-        gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
+        gridline_kwargs=gridline_kwargs, mesh_method=mesh_method,
+        pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
 
@@ -289,31 +323,34 @@ def orthographic(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (5.5, 6.5),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy Orthographic projection.
 
     Parameters
@@ -335,7 +372,7 @@ def orthographic(
         Explicit longitude/latitude WCS world-axis indices.
     ax : GeoAxes or None, default=None
         Existing axes for an overlay; ``None`` creates axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Colatitude and longitude sampling-grid sizes.
     resolution : {"low", "medium", "high"} or None, default=None
         Preset overriding both sampling-grid sizes and selecting a 14, 16, or
@@ -345,8 +382,8 @@ def orthographic(
         Use HEALPix NEST ordering for a 1D map.
     interpolate : bool, default=False
         Interpolate sampled map values instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables sentinel matching.
     badcolor : color or None, default=None
@@ -354,17 +391,22 @@ def orthographic(
     vmin, vmax : float or None, defaults=None, None
         Optional color-scale limits.
     norm : str or Normalize or None, default=None
-        Color normalization passed to ``pcolormesh``.
+        Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Optional colorbar label.
+    colorbar_kwargs : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Optional axes title.
     show_gridlines : bool, default=True
         Draw geographic gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -373,14 +415,21 @@ def orthographic(
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
-    gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
-        options are limited to ``alpha``, ``rasterized``, and nearest or auto
-        ``shading``. Set drawing order with the top-level ``zorder`` argument.
+    gridline_kwargs : dict or None, default=None
+        Extra gridline options.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
+    pcolormesh_kwargs : dict or None, default=None
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(5.5, 6.5)
@@ -396,12 +445,15 @@ def orthographic(
         world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta, n_phi=n_phi,
         resolution=resolution, nest=nest, interpolate=interpolate, cmap=cmap,
         badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax, norm=norm,
-        colorbar_title=colorbar_title, title=title, show_gridlines=show_gridlines,
+        colorbar_title=colorbar_title, colorbar_kwargs=colorbar_kwargs,
+        title=title, show_gridlines=show_gridlines,
         gridline_adder=add_gridlines,
         plot_mode=plot_mode, overlay_color=overlay_color, alpha=alpha,
         zorder=zorder,
-        gridline_kwargs=gridline_kwargs, pcolormesh_kwargs=pcolormesh_kwargs,
+        gridline_kwargs=gridline_kwargs, mesh_method=mesh_method,
+        pcolormesh_kwargs=pcolormesh_kwargs,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         add_colorbar=add_colorbar, figsize=figsize, dpi=dpi,
     )
 
@@ -416,31 +468,34 @@ def platecarree(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy PlateCarree projection.
 
     Parameters
@@ -454,8 +509,8 @@ def platecarree(
         ``(lon_min, lon_max, lat_min, lat_max)`` in degrees for new axes;
         ``extent="auto"`` infers the WCS image footprint for WCS-backed maps
         and selects the global extent for HEALPix maps. ``None`` keeps the
-        default global view. Regional extents also define the sampling domain;
-        an existing ``ax`` retains its own extent.
+        default global view. The grid samples the visible viewport; an
+        existing ``ax`` retains its own extent.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -468,7 +523,7 @@ def platecarree(
         Explicit longitude/latitude WCS axes.
     ax : GeoAxes or None, default=None
         Existing overlay axes; ``None`` creates axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Sampling-grid dimensions.
     resolution : {"low", "medium", "high"} or None, default=None
         Sampling-grid preset and 14, 16, or 18 point base font for low,
@@ -477,8 +532,8 @@ def platecarree(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate samples instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -486,17 +541,22 @@ def platecarree(
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None
-        Mesh color normalization.
+        Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwargs : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -505,14 +565,21 @@ def platecarree(
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
-    gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
-        options are limited to ``alpha``, ``rasterized``, and nearest or auto
-        ``shading``. Set drawing order with the top-level ``zorder`` argument.
+    gridline_kwargs : dict or None, default=None
+        Extra gridline options.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
+    pcolormesh_kwargs : dict or None, default=None
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -529,13 +596,16 @@ def platecarree(
         wcs=wcs, world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta,
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
-        norm=norm, colorbar_title=colorbar_title, title=title,
+        norm=norm, colorbar_title=colorbar_title,
+        colorbar_kwargs=colorbar_kwargs, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
-        pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
+        mesh_method=mesh_method, pcolormesh_kwargs=pcolormesh_kwargs,
+        add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         figsize=figsize, dpi=dpi,
     )
 
@@ -550,31 +620,34 @@ def equidistantconic(
     wcs: Any | None = None,
     world_axis_mapping: Sequence[int] | None = None,
     ax: Any | None = None,
-    n_theta: int = 720,
-    n_phi: int = 1440,
+    n_theta: int = 1440,
+    n_phi: int = 2880,
     resolution: Literal["low", "medium", "high"] | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
     gridline_kwargs: dict[str, Any] | None = None,
+    mesh_method: Literal["wrap", "mesh"] = "wrap",
     pcolormesh_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
+    annotate_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
     figsize: tuple[float, float] = (8.0, 5.0),
     dpi: int = 300,
-) -> Figure:
+) -> PlotResult:
     """Plot a sky map using a Cartopy EquidistantConic projection.
 
     Parameters
@@ -588,7 +661,9 @@ def equidistantconic(
         Geographic bounds for new axes and default projection-center inference.
         ``extent="auto"`` infers the WCS image footprint for WCS-backed maps
         and selects the global extent for HEALPix maps. ``None`` keeps the
-        default global view. Regional extents also define the sampling domain.
+        default global view. The grid samples the entire projected viewport,
+        which can extend beyond these bounds. The chosen projection parameters
+        determine that visible region.
     coordinate_frame : str or None, default=None
         Source-frame metadata label.
     coordinate_transform : sequence[str] or None, default=None
@@ -601,7 +676,7 @@ def equidistantconic(
         Explicit longitude/latitude WCS world-axis mapping.
     ax : GeoAxes or None, default=None
         Existing overlay axes; ``None`` creates axes.
-    n_theta, n_phi : int, defaults=720, 1440
+    n_theta, n_phi : int, defaults=1440, 2880
         Sampling-grid dimensions.
     resolution : {"low", "medium", "high"} or None, default=None
         Sampling-grid preset and 14, 16, or 18 point base font for low,
@@ -610,8 +685,8 @@ def equidistantconic(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate samples instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -619,17 +694,22 @@ def equidistantconic(
     vmin, vmax : float or None, defaults=None, None
         Color-scale limits.
     norm : str or Normalize or None, default=None
-        Mesh color normalization.
+        Color normalization used for the map image or mesh.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwargs : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=True
         Draw gridlines.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Vector mode requires a two-element ``(U, V)`` map sequence
         and ``ax=`` from a previously rendered magnitude map.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     overlay_color : color, default="k"
         Invalid-pixel overlay color. ``cmap`` is ignored for mask overlays.
     alpha : float or None, default=None
@@ -638,14 +718,21 @@ def equidistantconic(
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
         and mask overlays to 3.
-    gridline_kwargs, pcolormesh_kwargs : dict or None, defaults=None, None
-        Extra gridline and mesh options. For maps with ``alpha < 1``, mesh
-        options are limited to ``alpha``, ``rasterized``, and nearest or auto
-        ``shading``. Set drawing order with the top-level ``zorder`` argument.
+    gridline_kwargs : dict or None, default=None
+        Extra gridline options.
+    mesh_method : {"wrap", "mesh"}, default="wrap"
+        Render scalar maps as a warped image or a Cartopy pixel mesh. Mesh
+        rendering is available only for opaque scalar maps.
+    pcolormesh_kwargs : dict or None, default=None
+        Extra mesh options, used only when ``mesh_method="mesh"``. Ignored
+        otherwise. Set drawing order with the top-level ``zorder`` argument.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     figsize : tuple[float, float], default=(8.0, 5.0)
@@ -676,13 +763,16 @@ def equidistantconic(
         wcs=wcs, world_axis_mapping=world_axis_mapping, ax=ax, n_theta=n_theta,
         n_phi=n_phi, resolution=resolution, nest=nest, interpolate=interpolate,
         cmap=cmap, badvalue=badvalue, badcolor=badcolor, vmin=vmin, vmax=vmax,
-        norm=norm, colorbar_title=colorbar_title, title=title,
+        norm=norm, colorbar_title=colorbar_title,
+        colorbar_kwargs=colorbar_kwargs, title=title,
         show_gridlines=show_gridlines, gridline_adder=add_gridlines,
         plot_mode=plot_mode,
         overlay_color=overlay_color, alpha=alpha, zorder=zorder,
         gridline_kwargs=gridline_kwargs,
-        pcolormesh_kwargs=pcolormesh_kwargs, add_colorbar=add_colorbar,
+        mesh_method=mesh_method, pcolormesh_kwargs=pcolormesh_kwargs,
+        add_colorbar=add_colorbar,
         vector_kwargs=vector_kwargs,
+        annotate_kwargs=annotate_kwargs,
         figsize=figsize, dpi=dpi,
     )
 
@@ -701,18 +791,19 @@ def gnomonic(
     ax: Any | None = None,
     nest: bool = False,
     interpolate: bool = False,
-    cmap: str | Sequence[Any] = "roma_r",
+    cmap: str | Sequence[Any] | None = None,
     badvalue: float | None = hp.UNSEEN,
     badcolor: Any = None,
     vmin: float | None = None,
     vmax: float | None = None,
     norm: str | Normalize | None = None,
     colorbar_title: str = "Map value",
+    colorbar_kwargs: dict[str, Any] | None = None,
     title: str | None = None,
     show_gridlines: bool = False,
     gridline_kwargs: dict[str, Any] | None = None,
     add_colorbar: bool = True,
-    plot_mode: Literal["map", "overlay_mask", "vector_field"] = "map",
+    plot_mode: Literal["map", "overlay_mask", "vector_field", "annotation"] = "map",
     overlay_color: Any = "k",
     alpha: float | None = None,
     zorder: float | None = None,
@@ -721,7 +812,8 @@ def gnomonic(
     dpi: int = 300,
     imshow_kwargs: dict[str, Any] | None = None,
     vector_kwargs: dict[str, Any] | None = None,
-) -> Figure:
+    annotate_kwargs: dict[str, Any] | None = None,
+) -> PlotResult:
     """Plot a local gnomonic view using Matplotlib.
 
     Parameters
@@ -748,8 +840,8 @@ def gnomonic(
         Use HEALPix NEST ordering.
     interpolate : bool, default=False
         Interpolate sampled values instead of using nearest-pixel lookup.
-    cmap : str or sequence, default="roma_r"
-        Colormap specification.
+    cmap : str, sequence, or None, default=None
+        Colormap specification; ``None`` uses the active theme.
     badvalue : float or None, default=healpy.UNSEEN
         Missing-data sentinel; ``None`` disables it.
     badcolor : color or None, default=None
@@ -760,6 +852,8 @@ def gnomonic(
         Image color normalization.
     colorbar_title : str, default="Map value"
         Colorbar label.
+    colorbar_kwargs : dict or None, default=None
+        Extra arguments passed to Matplotlib ``Figure.colorbar``.
     title : str or None, default=None
         Axes title.
     show_gridlines : bool, default=False
@@ -769,13 +863,19 @@ def gnomonic(
     gridline_kwargs : dict or None, default=None
         Matplotlib contour-style overrides for gnomonic gridlines, such as
         ``color``, ``linestyle``, ``linewidth``, or ``alpha``.
-    plot_mode : {"map", "overlay_mask", "vector_field"}, default="map"
+    plot_mode : {"map", "overlay_mask", "vector_field", "annotation"}, default="map"
         Render a scalar map, a binary-mask overlay, or a transparent vector
         overlay. Use a separate scalar-map call to render vector magnitude.
+        Annotation mode takes ``(lon, lat, text)`` as ``map_data`` and requires
+        ``ax=`` from an existing map. The position uses the displayed frame
+        in degrees.
     vector_kwargs : dict or None, default=None
         Options for the vector artist in vector mode. Set ``method`` to
         ``"streamplot"`` (default) or ``"quiver"``. Scalar color arguments
         are ignored in vector mode.
+    annotate_kwargs : dict or None, default=None
+        Additional options for Matplotlib ``annotate``, such as ``fontsize``,
+        ``color``, ``arrowprops``, and ``bbox``.
     add_colorbar : bool, default=True
         Add a horizontal colorbar.
     alpha : float or None, default=None
@@ -808,8 +908,32 @@ def gnomonic(
     if 0.5 * max(xsize, ysize) * pixel_size_arcmin >= 90.0 * 60.0:
         raise ValueError("Gnomonic views must remain within 90 degrees of the tangent point.")
 
-    lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
+    if cmap is None:
+        cmap = mpl.rcParams["image.cmap"]
+
     plot_mode = _plotlib._validate_plot_mode(plot_mode)
+    if plot_mode == "annotation":
+        if ax is None:
+            raise ValueError("plot_mode='annotation' requires ax= from an existing map.")
+        label, xy, style = _plotlib._resolve_annotation(
+            map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
+        )
+        style.setdefault("zorder", _plotlib._annotation_zorder(ax))
+        previous = getattr(ax, "_skyplot_payload", {})
+        if previous.get("projection") == "gnomonic":
+            lon0_deg, lat0_deg = previous["projection_kwargs"]["center"]
+        else:
+            lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
+        anchor = _gnomonic_forward(*xy, lon0_deg, lat0_deg)
+        ax.annotate(label, xy=anchor, **style)
+        payload = {
+            **previous, "plot_mode": "annotation",
+            "annotation": {"text": label, "lon": xy[0], "lat": xy[1]},
+        }
+        ax._skyplot_payload = payload  # type: ignore[attr-defined]
+        ax.figure._skyplot_payload = payload  # type: ignore[attr-defined]
+        return PlotResult(ax.figure, ax)
+    lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
     is_overlay_mask = plot_mode == "overlay_mask"
     vector_field = plot_mode == "vector_field"
     if vector_field and ax is None:
@@ -866,7 +990,6 @@ def gnomonic(
     if is_overlay_mask:
         values = np.ma.masked_where(values != 0, values)
 
-    created_fig = ax is None
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     else:
@@ -925,13 +1048,26 @@ def gnomonic(
     )
     if add_colorbar:
         assert image is not None
-        colorbar = fig.colorbar(image, ax=ax, orientation="horizontal", pad=0.08, fraction=0.05, aspect=40)
-        colorbar.set_label(colorbar_title)
-        _plotlib._set_colorbar_ticks(colorbar)
+        colorbar_options: dict[str, Any] = {
+            "ax": ax, "orientation": "horizontal", "pad": 0.08, "fraction": 0.05,
+            "aspect": 40, "label": colorbar_title,
+        }
+        if colorbar_kwargs is not None:
+            colorbar_options.update(colorbar_kwargs)
+            if "location" in colorbar_kwargs and "orientation" not in colorbar_kwargs:
+                colorbar_options.pop("orientation")
+        colorbar = fig.colorbar(image, **colorbar_options)
+        custom_ticks = colorbar_kwargs and (
+            "ticks" in colorbar_kwargs or "format" in colorbar_kwargs
+        )
+        if not custom_ticks:
+            _plotlib._set_colorbar_ticks(colorbar)
+        else:
+            colorbar.minorticks_off()
     if title:
         ax.set_title(title)
-    fig.tight_layout()
-    fig._skyplot_payload = {  # type: ignore[attr-defined]
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95) if ax.get_title() else None)
+    payload = {
         "backend": "matplotlib-gnomonic", "projection": "gnomonic",
         "projection_kwargs": {"center": [lon0_deg, lat0_deg], "xsize": int(xsize), "ysize": int(ysize), "pixel_size_arcmin": float(pixel_size_arcmin), "astro_orientation": bool(astro_orientation)},
         "extent": [float(value) for value in extent], "shape": [int(values.shape[0]), int(values.shape[1])],
@@ -942,12 +1078,11 @@ def gnomonic(
         "vector_method": vector_method,
         "alpha": alpha,
         "zorder": zorder,
-        "colorbar_orientation": "horizontal",
+        "colorbar_orientation": colorbar.orientation if add_colorbar else "horizontal",
     }
-    if created_fig:
-        plt.close(fig)
-    _plotlib._last_figure = fig
-    return fig
+    ax._skyplot_payload = payload  # type: ignore[attr-defined]
+    fig._skyplot_payload = payload  # type: ignore[attr-defined]
+    return PlotResult(fig, ax)
 
 __all__ = [
     "AVAILABLE_PROJECTIONS",

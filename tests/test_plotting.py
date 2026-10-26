@@ -9,9 +9,10 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import numpy as np
 import pytest
 from astropy.wcs import WCS
-from matplotlib.colors import SymLogNorm, to_rgba
+from matplotlib.colors import LogNorm, SymLogNorm, to_rgba
 import skyplot.plotlib as plotlib
 import skyplot.plotting as plotting
+from skyplot.result import PlotResult
 from skyplot.normalization import PlanckLogNorm
 
 matplotlib.use("Agg")
@@ -201,7 +202,8 @@ def test_wcs_sampling_infers_reversed_ra_dec_world_axis_order() -> None:
         world_axis_mapping=None,
     )
 
-    assert np.array_equal(wcs.last_world, [[2.0, 1.0]])
+    # The sampler tries the requested longitude and its two 360-degree aliases.
+    assert np.array_equal(wcs.last_world, [[2.0, 1.0], [2.0, 361.0], [2.0, -359.0]])
     assert values[0, 0] == 11.0
 
 
@@ -283,7 +285,8 @@ def test_projection_plotter_accepts_multi_axis_wcs_with_explicit_mapping() -> No
         add_colorbar=False,
     )
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     assert getattr(fig, "_skyplot_payload")["shape"] == [8, 16]
 
 
@@ -368,8 +371,8 @@ def test_badvalue_and_badcolor_are_applied_to_plot_colormap() -> None:
         badcolor="magenta",
     )
 
-    quad = fig.axes[0].collections[0]
-    assert np.allclose(quad.cmap.get_bad(), to_rgba("magenta"))
+    image = fig.axes[0].images[0]
+    assert np.allclose(image.cmap.get_bad(), to_rgba("magenta"))
     payload = getattr(fig, "_skyplot_payload")
     assert payload["badvalue"] == hp.UNSEEN
     assert payload["badcolor"] == "magenta"
@@ -387,23 +390,54 @@ def test_badcolor_none_makes_missing_samples_transparent() -> None:
         badcolor=None,
     )
 
-    quad = fig.axes[0].collections[0]
-    assert quad.cmap.get_bad()[3] == pytest.approx(0.0)
+    image = fig.axes[0].images[0]
+    assert image.cmap.get_bad()[3] == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize(
     "func",
     [mollweide, orthographic, platecarree, equidistantconic, gnomonic],
 )
-def test_projection_plotters_return_matplotlib_figure(func) -> None:
+def test_projection_plotters_return_live_plot_result(func) -> None:
     nside = 8
     rng = np.random.default_rng(10)
     hp_map = rng.normal(size=hp.nside2npix(nside))
 
     fig = func(hp_map, n_theta=18, n_phi=36)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     assert len(fig.axes) >= 1
+    assert fig.ax is fig.figure.axes[0]
+    assert fig.figure.number in plt.get_fignums()
+    assert not hasattr(fig, "_repr_png_")
+    assert not hasattr(fig, "_repr_mimebundle_")
+
+
+def test_pyplot_savefig_uses_new_plot(tmp_path) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    result = mollweide(
+        hp_map, n_theta=8, n_phi=16, show_gridlines=False,
+        add_colorbar=False, title="Full title remains visible",
+    )
+    output = tmp_path / "current_plot.png"
+
+    assert plt.gcf() is result.figure
+    result.figure.canvas.draw()
+    renderer = result.figure.canvas.get_renderer()
+    assert result.ax.title.get_window_extent(renderer).y1 <= result.figure.bbox.y1
+
+    mollweide(
+        hp_map, ax=result.ax, n_theta=8, n_phi=16,
+        plot_mode="overlay_mask", show_gridlines=False,
+    )
+    result.figure.canvas.draw()
+    renderer = result.figure.canvas.get_renderer()
+    assert result.ax.title.get_window_extent(renderer).y1 <= result.figure.bbox.y1
+    plt.savefig(output)
+
+    assert output.exists()
+    assert output.stat().st_size > 0
 
 
 def test_projection_plotter_accepts_2d_wcs_data() -> None:
@@ -413,7 +447,8 @@ def test_projection_plotter_accepts_2d_wcs_data() -> None:
 
     fig = mollweide(data, wcs=wcs, n_theta=12, n_phi=24, interpolate=False)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["shape"] == [12, 24]
 
@@ -467,7 +502,10 @@ def test_extent_none_keeps_wcs_map_global() -> None:
     )
 
     payload = getattr(fig, "_skyplot_payload")
-    assert payload["extent"] == pytest.approx([-180.0, 180.0, -90.0, 90.0])
+    assert payload["extent"] is None
+    assert fig.ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
+        [-180.0, 180.0, -90.0, 90.0]
+    )
 
 
 def test_extent_auto_uses_global_extent_for_healpix_map() -> None:
@@ -509,6 +547,45 @@ def test_local_extent_samples_wcs_map_on_local_grid() -> None:
     assert sampled_world[:, 1].max() == pytest.approx(-2.0)
 
 
+@pytest.mark.parametrize("central_longitude", [0.0, 25.0])
+def test_conic_sampling_covers_projected_viewport(monkeypatch, central_longitude) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    requested = (-60.0, 60.0, -75.0, -10.0)
+    sampled_extents = []
+    original_grid = plotlib._get_display_grid
+
+    def record_grid(n_theta, n_phi, extent=None):
+        sampled_extents.append(extent)
+        return original_grid(n_theta, n_phi, extent)
+
+    monkeypatch.setattr(plotlib, "_get_display_grid", record_grid)
+    result = equidistantconic(
+        hp_map,
+        projection_kwargs={
+            "central_longitude": central_longitude,
+            "central_latitude": -45.0,
+            "standard_parallels": (-70.0, -15.0),
+        },
+        extent=requested,
+        n_theta=12,
+        n_phi=24,
+        show_gridlines=False,
+        add_colorbar=False,
+    )
+
+    sampled = sampled_extents[0]
+    visible = result.ax.get_extent(crs=ccrs.PlateCarree())
+    assert sampled == pytest.approx(visible)
+    assert sampled[0] < requested[0]
+    assert sampled[1] > requested[1]
+    assert sampled[3] > requested[3]
+    assert result.figure._skyplot_payload["extent"] == list(requested)
+    rendered = np.ma.asarray(result.ax.images[0].get_array())
+    masked = np.ma.getmaskarray(rendered)
+    for row, col in ((20, 20), (20, -21), (-21, 20), (-21, -21)):
+        assert not masked[row, col]
+
+
 def test_mollweide_rotated_central_longitude_keeps_all_map_samples() -> None:
     hp_map = np.ones(hp.nside2npix(2))
 
@@ -520,6 +597,7 @@ def test_mollweide_rotated_central_longitude_keeps_all_map_samples() -> None:
         interpolate=False,
         show_gridlines=False,
         add_colorbar=False,
+        mesh_method="mesh",
     )
 
     values = fig.axes[0].collections[0].get_array()
@@ -534,7 +612,8 @@ def test_projection_plotter_accepts_ndmap_like_with_wcs_attribute() -> None:
 
     fig = platecarree(ndmap_like, n_theta=10, n_phi=18, interpolate=False)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_projection_plotter_rejects_2d_input_without_wcs() -> None:
@@ -560,7 +639,7 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
         hp_map_a,
         n_theta=12,
         n_phi=24,
-        pcolormesh_kwargs={"alpha": 0.8},
+        alpha=0.8,
     )
     ax = fig.axes[0]
 
@@ -571,10 +650,11 @@ def test_projection_plotter_can_overlay_on_existing_axes() -> None:
         n_phi=24,
         show_gridlines=False,
         add_colorbar=False,
-        pcolormesh_kwargs={"alpha": 0.4},
+        alpha=0.4,
     )
 
-    assert fig_overlay is fig
+    assert fig_overlay.figure is fig.figure
+    assert fig_overlay.ax is ax
     assert len(fig.axes) == 2
 
 
@@ -586,24 +666,121 @@ def test_map_alpha_selects_a_single_image() -> None:
     assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.35)
 
     fig = mollweide(hp_map, pcolormesh_kwargs={"alpha": 0.8}, **options)
-    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(0.8)
+    assert fig.axes[0].images[-1].get_alpha() is None
 
     fig = mollweide(hp_map, alpha=1.0, **options)
-    assert fig.axes[0].collections[-1].get_alpha() == pytest.approx(1.0)
+    assert fig.axes[0].images[-1].get_alpha() == pytest.approx(1.0)
 
 
-def test_translucent_map_rejects_mesh_only_options() -> None:
+def test_wrap_ignores_mesh_only_options() -> None:
     hp_map = np.ones(hp.nside2npix(2))
-    with pytest.raises(ValueError, match="Translucent maps use a warped image"):
-        mollweide(
-            hp_map, alpha=0.5, pcolormesh_kwargs={"edgecolors": "red"},
-            n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False,
-        )
+    fig = mollweide(
+        hp_map, alpha=0.5,
+        pcolormesh_kwargs={"edgecolors": "red", "alpha": 0.1},
+        n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False,
+    )
+    assert len(fig.axes[0].images) == 1
+    assert fig.axes[0].images[0].get_alpha() == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
-@pytest.mark.parametrize("alpha_kwargs", [{"alpha": 0.03}, {"pcolormesh_kwargs": {"alpha": 0.03}}])
-def test_translucent_projection_overlay_preserves_base_map(plotter, alpha_kwargs) -> None:
+def test_mesh_method_selects_opaque_map_artist(plotter) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
+
+    wrapped = plotter(hp_map, **options)
+    assert len(wrapped.axes[0].images) == 1
+    assert wrapped._skyplot_payload["mesh_method"] == "wrap"
+
+    wrapped_opaque = plotter(hp_map, alpha=1.0, **options)
+    assert len(wrapped_opaque.axes[0].images) == 1
+    assert wrapped_opaque.axes[0].images[0].get_alpha() == pytest.approx(1.0)
+
+    mesh = plotter(hp_map, mesh_method="mesh", pcolormesh_kwargs={"edgecolors": "red"}, **options)
+    assert mesh.axes[0].collections
+    assert not mesh.axes[0].images
+    assert mesh._skyplot_payload["mesh_method"] == "mesh"
+
+
+def test_full_sky_image_centres_follow_samples_and_mesh_keeps_coordinates(monkeypatch) -> None:
+    from cartopy.mpl.geoaxes import GeoAxes
+
+    hp_map = np.ones(hp.nside2npix(2))
+    n_theta, n_phi = 8, 8
+    sampled_lon, sampled_lat = _get_display_grid(n_theta, n_phi)
+    image_inputs = []
+    mesh_coordinates = []
+    original_imshow = GeoAxes.imshow
+    original_pcolormesh = GeoAxes.pcolormesh
+
+    def record_imshow(self, values, **kwargs):
+        image_inputs.append((values.copy(), kwargs["extent"]))
+        return original_imshow(self, values, **kwargs)
+
+    def record_pcolormesh(self, lon, lat, values, **kwargs):
+        mesh_coordinates.append((lon.copy(), lat.copy()))
+        return original_pcolormesh(self, lon, lat, values, **kwargs)
+
+    monkeypatch.setattr(GeoAxes, "imshow", record_imshow)
+    monkeypatch.setattr(GeoAxes, "pcolormesh", record_pcolormesh)
+    options = {"n_theta": n_theta, "n_phi": n_phi, "show_gridlines": False,
+               "add_colorbar": False}
+    image = platecarree(hp_map, **options)
+    platecarree(hp_map, mesh_method="mesh", **options)
+    platecarree(hp_map, plot_mode="overlay_mask", ax=image.ax, **options)
+
+    image_values, (left, right, bottom, top) = image_inputs[0]
+    image_lon = left + (np.arange(n_phi + 1) + 0.5) * (right - left) / (n_phi + 1)
+    image_lat = bottom + (np.arange(n_theta) + 0.5) * (top - bottom) / n_theta
+    assert image_lon[:-1] == pytest.approx(sampled_lon[0])
+    assert image_lon[-1] == pytest.approx(180.0)
+    assert image_lat == pytest.approx(sampled_lat[:, 0])
+    np.testing.assert_array_equal(image_values[:, -1], image_values[:, 0])
+    assert np.ma.getmaskarray(image_inputs[1][0]).all()
+    assert left < -180.0 and right > 180.0
+    assert bottom < -90.0 and top > 90.0
+    assert image.ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
+        (-180.0, 180.0, -90.0, 90.0)
+    )
+    np.testing.assert_allclose(mesh_coordinates[0][0], sampled_lon)
+    np.testing.assert_allclose(mesh_coordinates[0][1], sampled_lat)
+
+
+def test_mesh_method_rejects_invalid_and_translucent_mesh() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
+    with pytest.raises(ValueError, match="mesh_method"):
+        mollweide(hp_map, mesh_method="unknown", **options)
+    with pytest.raises(ValueError, match="opaque"):
+        mollweide(hp_map, mesh_method="mesh", alpha=0.5, **options)
+    with pytest.raises(ValueError, match="opaque"):
+        mollweide(hp_map, mesh_method="mesh", pcolormesh_kwargs={"alpha": 0.5}, **options)
+
+
+def test_orthographic_wrap_keeps_color_limits_from_hidden_samples() -> None:
+    hp_map = np.zeros(hp.nside2npix(4))
+    hp_map[hp.ang2pix(4, 180.0, 0.0, lonlat=True)] = 100.0
+
+    fig = orthographic(hp_map, n_theta=48, n_phi=96, show_gridlines=False)
+
+    assert fig.axes[0].images[0].get_clim() == pytest.approx((0.0, 100.0))
+
+
+def test_rotated_mollweide_wrap_keeps_badcolor() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    hp_map[0] = hp.UNSEEN
+
+    fig = mollweide(
+        hp_map, projection_kwargs={"central_longitude": 90.0},
+        n_theta=18, n_phi=36, badcolor="magenta",
+        show_gridlines=False, add_colorbar=False,
+    )
+
+    assert fig.axes[0].images[0].cmap.get_bad() == pytest.approx(to_rgba("magenta"))
+
+
+@pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
+def test_translucent_projection_overlay_preserves_base_map(plotter) -> None:
     size = hp.nside2npix(4)
     pol_map = np.linspace(0.0, 3000.0, size)
     lic_map = np.linspace(0.0, 1.0, size)
@@ -619,13 +796,13 @@ def test_translucent_projection_overlay_preserves_base_map(plotter, alpha_kwargs
         norm=SymLogNorm(linthresh=10.0, vmin=0.0, vmax=3000.0),
         zorder=1, **base_options,
     )
-    canvas = FigureCanvasAgg(fig)
+    canvas = FigureCanvasAgg(fig.figure)
     canvas.draw()
     before = np.asarray(canvas.buffer_rgba()).copy()
 
     ax = fig.axes[0]
     view = ax.get_extent(crs=ccrs.PlateCarree())
-    plotter(lic_map, ax=ax, cmap="gray", zorder=3, **alpha_kwargs, **options)
+    plotter(lic_map, ax=ax, cmap="gray", zorder=3, alpha=0.03, **options)
     canvas.draw()
     after = np.asarray(canvas.buffer_rgba())
 
@@ -648,7 +825,7 @@ def test_translucent_gnomonic_overlay_preserves_base_map() -> None:
     hp_map = np.linspace(0.0, 1.0, hp.nside2npix(4))
     options = {"n_theta": 48, "n_phi": 96, "show_gridlines": False, "add_colorbar": False}
     fig = gnomonic(hp_map, **options)
-    canvas = FigureCanvasAgg(fig)
+    canvas = FigureCanvasAgg(fig.figure)
     canvas.draw()
     before = np.asarray(canvas.buffer_rgba()).copy()
 
@@ -770,7 +947,8 @@ def test_vector_field_draws_a_transparent_overlay(method: str) -> None:
     )
 
     payload = getattr(fig, "_skyplot_payload")
-    assert result is fig
+    assert result.figure is fig.figure
+    assert result.ax is ax
     assert payload["plot_mode"] == "vector_field"
     assert payload["vector_method"] == method
     assert payload["vmin"] is None
@@ -811,7 +989,7 @@ def test_plot_alpha_defaults_and_overlay_mask(plotter) -> None:
     options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
 
     fig = plotter(component, **options)
-    artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+    artist = fig.axes[0].images[-1]
     assert artist.get_alpha() is None
     assert fig._skyplot_payload["alpha"] is None
 
@@ -873,7 +1051,7 @@ def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> No
 
     fig = plotter(hp_map, **options)
     if norm_kind == "string_symlog":
-        artist = fig.axes[0].images[-1] if plotter is gnomonic else fig.axes[0].collections[-1]
+        artist = fig.axes[0].images[-1]
         threshold = artist.norm._scale.linthresh
     expected = [-100.0, 100.0]
     if threshold is not None:
@@ -886,7 +1064,103 @@ def test_colorbar_labels_limits_and_linear_region(plotter, norm_kind: str) -> No
     for value in expected:
         matches = np.flatnonzero(np.isclose(ticks, value))
         assert len(matches) == 1
-        assert labels[matches[0]] == f"{value:g}"
+        if norm_kind != "linear" and abs(value) == 100:
+            assert labels[matches[0]] == (
+                r"$-1\times10^{2}$" if value < 0 else r"$1\times10^{2}$"
+            )
+        else:
+            assert labels[matches[0]] == f"{value:g}"
+    for tick, label in zip(ticks, labels):
+        if not np.any(np.isclose(tick, expected)):
+            assert label == ""
+    assert colorbar_ax.xaxis.get_minorticklocs().size == 0
+
+
+@pytest.mark.parametrize("plotter", [mollweide, gnomonic])
+@pytest.mark.parametrize("norm", [LogNorm(vmin=1.0, vmax=5000.0), "log"])
+def test_log_colorbar_uses_scientific_labels(plotter, norm) -> None:
+    hp_map = np.geomspace(1.0, 5000.0, hp.nside2npix(2))
+    options = {"norm": norm, "n_theta": 12, "n_phi": 24, "show_gridlines": False}
+    if norm == "log":
+        options.update(vmin=1.0, vmax=5000.0)
+    fig = plotter(hp_map, **options)
+    fig.canvas.draw()
+    colorbar_ax = fig.axes[-1]
+    ticks = colorbar_ax.get_xticks()
+    labels = [label.get_text() for label in colorbar_ax.get_xticklabels()]
+    for value, expected in ((1.0, r"$1\times10^{0}$"), (5000.0, r"$5\times10^{3}$")):
+        matches = np.flatnonzero(np.isclose(ticks, value))
+        assert len(matches) == 1
+        assert labels[matches[0]] == expected
+
+
+@pytest.mark.parametrize("plotter", [mollweide, platecarree])
+@pytest.mark.parametrize("vmax", [None, 5.0])
+def test_string_log_autoscales_from_positive_samples(plotter, vmax) -> None:
+    hp_map = np.linspace(-2.0, 5.0, hp.nside2npix(2))
+    fig = plotter(
+        hp_map, norm="log", vmax=vmax,
+        n_theta=12, n_phi=24, show_gridlines=False,
+    )
+
+    fig.canvas.draw()
+    image = fig.ax.images[0]
+    assert image.norm.vmin > 0
+    assert image.norm.vmax == pytest.approx(5.0)
+    assert fig.axes[-1].get_xticks().size > 0
+
+
+def test_symlog_colorbar_formats_only_log_range() -> None:
+    hp_map = np.linspace(-5000.0, 5000.0, hp.nside2npix(2))
+    fig = mollweide(
+        hp_map, norm=SymLogNorm(linthresh=10.0, vmin=-5000.0, vmax=5000.0),
+        n_theta=12, n_phi=24, show_gridlines=False,
+    )
+    fig.canvas.draw()
+    colorbar_ax = fig.axes[-1]
+    ticks = colorbar_ax.get_xticks()
+    labels = [label.get_text() for label in colorbar_ax.get_xticklabels()]
+    for value, expected in (
+        (-5000.0, r"$-5\times10^{3}$"), (-10.0, "-10"),
+        (10.0, "10"), (5000.0, r"$5\times10^{3}$"),
+    ):
+        matches = np.flatnonzero(np.isclose(ticks, value))
+        assert len(matches) == 1
+        assert labels[matches[0]] == expected
+
+
+@pytest.mark.parametrize(
+    "plotter", [mollweide, orthographic, platecarree, equidistantconic, gnomonic],
+)
+def test_colorbar_kwarg_passes_matplotlib_options(plotter) -> None:
+    hp_map = np.linspace(-1.0, 1.0, hp.nside2npix(2))
+    fig = plotter(
+        hp_map, n_theta=12, n_phi=24, show_gridlines=False,
+        vmin=-1.0, vmax=1.0,
+        colorbar_kwargs={
+            "orientation": "vertical", "ticks": [-1.0, 0.0, 1.0],
+            "format": "%.1f", "label": "Custom units",
+        },
+    )
+
+    colorbar_ax = fig.axes[-1]
+    FigureCanvasAgg(fig.figure).draw()
+    assert colorbar_ax.get_ylabel() == "Custom units"
+    assert colorbar_ax.get_yticks() == pytest.approx([-1.0, 0.0, 1.0])
+    assert [label.get_text() for label in colorbar_ax.get_yticklabels()] == [
+        "-1.0", "0.0", "1.0",
+    ]
+    assert colorbar_ax.yaxis.get_minorticklocs().size == 0
+
+
+def test_colorbar_kwarg_location_can_set_orientation() -> None:
+    hp_map = np.linspace(0.0, 1.0, hp.nside2npix(2))
+    fig = mollweide(
+        hp_map, n_theta=12, n_phi=24, show_gridlines=False,
+        colorbar_kwargs={"location": "right"},
+    )
+
+    assert fig._skyplot_payload["colorbar_orientation"] == "vertical"
 
 
 def test_planck_colorbar_marks_derived_limits() -> None:
@@ -895,7 +1169,7 @@ def test_planck_colorbar_marks_derived_limits() -> None:
         hp_map, n_theta=12, n_phi=24, show_gridlines=False,
         norm=PlanckLogNorm(linthresh=10.0),
     )
-    artist = fig.axes[0].collections[-1]
+    artist = fig.axes[0].images[-1]
     ticks = fig.axes[-1].get_xticks()
 
     for value in (artist.norm.vmin, -10.0, 10.0, artist.norm.vmax):
@@ -910,9 +1184,7 @@ def test_plot_modes_have_layered_zorders_and_accept_an_override() -> None:
         component, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False,
     )
     ax = fig.axes[0]
-    assert any(
-        artist.get_zorder() == pytest.approx(1.0) for artist in ax.collections
-    )
+    assert ax.images[0].get_zorder() == pytest.approx(1.0)
 
     mollweide(mask, ax=ax, plot_mode="overlay_mask", n_theta=12, n_phi=24)
     assert ax.images[-1].get_zorder() == pytest.approx(3.0)
@@ -963,6 +1235,121 @@ def test_plot_mode_overlay_mask_is_recorded() -> None:
     assert getattr(fig, "_skyplot_payload")["plot_mode"] == "overlay_mask"
 
 
+@pytest.mark.parametrize("plotter", [mollweide, orthographic, platecarree, equidistantconic])
+def test_annotation_adds_styled_text_in_display_coordinates(plotter) -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = plotter(hp_map, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False)
+    ax = fig.ax
+    image_count = len(ax.images)
+    result = plotter(
+        (12.0, -8.0, "Reference"), ax=ax, plot_mode="annotation",
+        annotate_kwargs={
+            "fontsize": 13, "color": "red", "fontfamily": "serif",
+            "ha": "center", "arrowprops": {"arrowstyle": "->"},
+        },
+        zorder=6.0,
+    )
+
+    assert result.ax is ax
+    assert len(ax.images) == image_count
+    label = ax.texts[-1]
+    assert label.get_text() == "Reference"
+    assert label.get_position() == (12.0, -8.0)
+    assert label.get_fontsize() == 13
+    assert label.get_color() == "red"
+    assert label.get_fontfamily() == ["serif"]
+    assert label.get_ha() == "center"
+    assert label.get_zorder() == 6.0
+    assert label.arrow_patch is not None
+    assert fig._skyplot_payload["plot_mode"] == "annotation"
+
+
+def test_gnomonic_annotation_uses_existing_map_center() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = gnomonic(
+        hp_map, center=(30.0, 20.0), xsize=24, ysize=24,
+        show_gridlines=False, add_colorbar=False,
+    )
+    gnomonic(
+        (30.0, 20.0, "Center"), ax=fig.ax, plot_mode="annotation",
+        annotate_kwargs={"fontsize": 11},
+    )
+    label = fig.ax.texts[-1]
+    assert label.xy == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert label.get_position() == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert label.get_fontsize() == 11
+    assert fig._skyplot_payload["plot_mode"] == "annotation"
+
+
+def test_gnomonic_annotation_uses_target_axes_center_in_shared_figure() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    figure, (first_ax, second_ax) = plt.subplots(1, 2)
+    options = {"xsize": 24, "ysize": 24, "show_gridlines": False,
+               "add_colorbar": False}
+    gnomonic(hp_map, center=(30.0, 20.0), ax=first_ax, **options)
+    gnomonic(hp_map, center=(-140.0, -20.0), ax=second_ax, **options)
+
+    assert figure._skyplot_payload["projection_kwargs"]["center"] == [-140.0, -20.0]
+    assert first_ax._skyplot_payload["projection_kwargs"]["center"] == [30.0, 20.0]
+    gnomonic((30.0, 20.0, "First"), ax=first_ax, plot_mode="annotation")
+    assert first_ax.texts[-1].xy == pytest.approx((0.0, 0.0), abs=1e-10)
+
+    gnomonic((-140.0, -20.0, "Second"), ax=second_ax, plot_mode="annotation")
+    assert second_ax.texts[-1].xy == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert first_ax._skyplot_payload["projection_kwargs"]["center"] == [30.0, 20.0]
+
+
+def test_annotation_accepts_xytext_in_annotate_kwargs() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = platecarree(hp_map, n_theta=12, n_phi=24, show_gridlines=False, add_colorbar=False)
+    platecarree(
+        (12.0, -8.0, "Offset"), ax=fig.ax, plot_mode="annotation",
+        annotate_kwargs={"xytext": (15.0, -6.0), "arrowprops": {"arrowstyle": "->"}},
+    )
+    label = fig.ax.texts[-1]
+    assert label.xy == (12.0, -8.0)
+    assert label.get_position() == (15.0, -6.0)
+    assert label.arrow_patch is not None
+    fig.canvas.draw()
+
+
+def test_gnomonic_annotation_accepts_matplotlib_textcoords() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = gnomonic(
+        hp_map, center=(30.0, 20.0), xsize=24, ysize=24,
+        show_gridlines=False, add_colorbar=False,
+    )
+    gnomonic(
+        (30.0, 20.0, "Offset"), ax=fig.ax, plot_mode="annotation",
+        annotate_kwargs={"xytext": (8.0, 10.0), "textcoords": "offset points"},
+    )
+    label = fig.ax.texts[-1]
+    assert label.xy == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert label.get_position() == (8.0, 10.0)
+    fig.canvas.draw()
+
+
+def test_annotation_validates_axes_coordinates_and_text() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    fig = mollweide(hp_map, n_theta=8, n_phi=16, show_gridlines=False, add_colorbar=False)
+    with pytest.raises(ValueError, match="requires ax="):
+        mollweide((0, 0, "Label"), plot_mode="annotation")
+    with pytest.raises(ValueError, match="requires a .* tuple"):
+        mollweide("Label", ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="requires a .* tuple"):
+        mollweide((0, 0, 1, 1, "Label"), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="text to be a string"):
+        mollweide((0, 0, 123), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="finite numbers"):
+        mollweide((0, float("nan"), "Label"), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="within \[-90, 90\]"):
+        mollweide((0, 91, "Label"), ax=fig.ax, plot_mode="annotation")
+    with pytest.raises(ValueError, match="outside the gnomonic hemisphere"):
+        gnomonic(
+            (180, 0, "Label"), ax=fig.ax, plot_mode="annotation",
+        )
+
+
 def test_existing_axes_extent_overrides_extent_argument() -> None:
     hp_map = np.ones(hp.nside2npix(8))
     fig, ax = plt.subplots(subplot_kw={"projection": ccrs.PlateCarree()})
@@ -979,7 +1366,8 @@ def test_existing_axes_extent_overrides_extent_argument() -> None:
     )
 
     payload = getattr(result, "_skyplot_payload")
-    assert result is fig
+    assert result.figure is fig.figure
+    assert result.ax is ax
     assert payload["extent"] == pytest.approx([-80.0, -20.0, 10.0, 50.0])
     assert ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
         [-80.0, -20.0, 10.0, 50.0]
@@ -1002,7 +1390,8 @@ def test_gnomonic_defaults_and_payload_shape() -> None:
 
     fig = gnomonic(hp_map)
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
     payload = getattr(fig, "_skyplot_payload")
     assert payload["projection"] == "gnomonic"
     assert payload["shape"] == [500, 500]
@@ -1056,9 +1445,9 @@ def test_gnomonic_rejects_invalid_parameters(kwargs) -> None:
 
 
 def test_resolution_preset_values() -> None:
-    assert RESOLUTION_PRESETS["low"] == (480, 960)
-    assert RESOLUTION_PRESETS["medium"] == (720, 1440)
-    assert RESOLUTION_PRESETS["high"] == (1440, 2880)
+    assert RESOLUTION_PRESETS["low"] == (720, 1440)
+    assert RESOLUTION_PRESETS["medium"] == (1440, 2880)
+    assert RESOLUTION_PRESETS["high"] == (2880, 5760)
 
 
 @pytest.mark.parametrize("resolution", ["low", "medium", "high"])
@@ -1077,7 +1466,7 @@ def test_resolution_presets_apply_larger_font_sizes(monkeypatch, resolution) -> 
     base_size = FONT_SIZE_PRESETS[resolution]
     assert fig.dpi == DPI_PRESETS[resolution]
     assert getattr(fig, "_skyplot_payload")["dpi"] == DPI_PRESETS[resolution]
-    assert ax.title.get_fontsize() == pytest.approx(1.1 * base_size)
+    assert ax.title.get_fontsize() == pytest.approx(1.02 * base_size)
     assert colorbar_ax.xaxis.label.get_size() == pytest.approx(base_size)
     assert colorbar_ax.xaxis.get_ticklabels()[0].get_size() == pytest.approx(0.85 * base_size)
 
@@ -1111,7 +1500,8 @@ def test_mollweide_accepts_matplotlib_cmap_name() -> None:
         cmap="viridis",
     )
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_projection_kwargs_are_recorded_in_payload() -> None:
@@ -1266,7 +1656,7 @@ def test_projection_kwargs_passthrough_to_cartopy() -> None:
             hp_map,
             n_theta=8,
             n_phi=16,
-            projection_kwargs={"not_a_real_kwarg": 1},
+            projection_kwargs={"not_a_real_kwargs": 1},
         )
 
 
@@ -1289,7 +1679,8 @@ def test_mollweide_colormaps_name_resolution(monkeypatch) -> None:
         cmap="batlow",
     )
 
-    assert isinstance(fig, matplotlib.figure.Figure)
+    assert isinstance(fig, PlotResult)
+    assert isinstance(fig.figure, matplotlib.figure.Figure)
 
 
 def test_gridline_defaults_in_payload() -> None:
