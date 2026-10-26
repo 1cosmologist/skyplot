@@ -702,6 +702,50 @@ def test_mesh_method_selects_opaque_map_artist(plotter) -> None:
     assert mesh._skyplot_payload["mesh_method"] == "mesh"
 
 
+def test_full_sky_image_centres_follow_samples_and_mesh_keeps_coordinates(monkeypatch) -> None:
+    from cartopy.mpl.geoaxes import GeoAxes
+
+    hp_map = np.ones(hp.nside2npix(2))
+    n_theta, n_phi = 8, 8
+    sampled_lon, sampled_lat = _get_display_grid(n_theta, n_phi)
+    image_inputs = []
+    mesh_coordinates = []
+    original_imshow = GeoAxes.imshow
+    original_pcolormesh = GeoAxes.pcolormesh
+
+    def record_imshow(self, values, **kwargs):
+        image_inputs.append((values.copy(), kwargs["extent"]))
+        return original_imshow(self, values, **kwargs)
+
+    def record_pcolormesh(self, lon, lat, values, **kwargs):
+        mesh_coordinates.append((lon.copy(), lat.copy()))
+        return original_pcolormesh(self, lon, lat, values, **kwargs)
+
+    monkeypatch.setattr(GeoAxes, "imshow", record_imshow)
+    monkeypatch.setattr(GeoAxes, "pcolormesh", record_pcolormesh)
+    options = {"n_theta": n_theta, "n_phi": n_phi, "show_gridlines": False,
+               "add_colorbar": False}
+    image = platecarree(hp_map, **options)
+    platecarree(hp_map, mesh_method="mesh", **options)
+    platecarree(hp_map, plot_mode="overlay_mask", ax=image.ax, **options)
+
+    image_values, (left, right, bottom, top) = image_inputs[0]
+    image_lon = left + (np.arange(n_phi + 1) + 0.5) * (right - left) / (n_phi + 1)
+    image_lat = bottom + (np.arange(n_theta) + 0.5) * (top - bottom) / n_theta
+    assert image_lon[:-1] == pytest.approx(sampled_lon[0])
+    assert image_lon[-1] == pytest.approx(180.0)
+    assert image_lat == pytest.approx(sampled_lat[:, 0])
+    np.testing.assert_array_equal(image_values[:, -1], image_values[:, 0])
+    assert np.ma.getmaskarray(image_inputs[1][0]).all()
+    assert left < -180.0 and right > 180.0
+    assert bottom < -90.0 and top > 90.0
+    assert image.ax.get_extent(crs=ccrs.PlateCarree()) == pytest.approx(
+        (-180.0, 180.0, -90.0, 90.0)
+    )
+    np.testing.assert_allclose(mesh_coordinates[0][0], sampled_lon)
+    np.testing.assert_allclose(mesh_coordinates[0][1], sampled_lat)
+
+
 def test_mesh_method_rejects_invalid_and_translucent_mesh() -> None:
     hp_map = np.ones(hp.nside2npix(2))
     options = {"n_theta": 8, "n_phi": 16, "show_gridlines": False, "add_colorbar": False}
@@ -1050,6 +1094,22 @@ def test_log_colorbar_uses_scientific_labels(plotter, norm) -> None:
         assert labels[matches[0]] == expected
 
 
+@pytest.mark.parametrize("plotter", [mollweide, platecarree])
+@pytest.mark.parametrize("vmax", [None, 5.0])
+def test_string_log_autoscales_from_positive_samples(plotter, vmax) -> None:
+    hp_map = np.linspace(-2.0, 5.0, hp.nside2npix(2))
+    fig = plotter(
+        hp_map, norm="log", vmax=vmax,
+        n_theta=12, n_phi=24, show_gridlines=False,
+    )
+
+    fig.canvas.draw()
+    image = fig.ax.images[0]
+    assert image.norm.vmin > 0
+    assert image.norm.vmax == pytest.approx(5.0)
+    assert fig.axes[-1].get_xticks().size > 0
+
+
 def test_symlog_colorbar_formats_only_log_range() -> None:
     hp_map = np.linspace(-5000.0, 5000.0, hp.nside2npix(2))
     fig = mollweide(
@@ -1219,6 +1279,24 @@ def test_gnomonic_annotation_uses_existing_map_center() -> None:
     assert label.get_position() == pytest.approx((0.0, 0.0), abs=1e-10)
     assert label.get_fontsize() == 11
     assert fig._skyplot_payload["plot_mode"] == "annotation"
+
+
+def test_gnomonic_annotation_uses_target_axes_center_in_shared_figure() -> None:
+    hp_map = np.ones(hp.nside2npix(2))
+    figure, (first_ax, second_ax) = plt.subplots(1, 2)
+    options = {"xsize": 24, "ysize": 24, "show_gridlines": False,
+               "add_colorbar": False}
+    gnomonic(hp_map, center=(30.0, 20.0), ax=first_ax, **options)
+    gnomonic(hp_map, center=(-140.0, -20.0), ax=second_ax, **options)
+
+    assert figure._skyplot_payload["projection_kwargs"]["center"] == [-140.0, -20.0]
+    assert first_ax._skyplot_payload["projection_kwargs"]["center"] == [30.0, 20.0]
+    gnomonic((30.0, 20.0, "First"), ax=first_ax, plot_mode="annotation")
+    assert first_ax.texts[-1].xy == pytest.approx((0.0, 0.0), abs=1e-10)
+
+    gnomonic((-140.0, -20.0, "Second"), ax=second_ax, plot_mode="annotation")
+    assert second_ax.texts[-1].xy == pytest.approx((0.0, 0.0), abs=1e-10)
+    assert first_ax._skyplot_payload["projection_kwargs"]["center"] == [30.0, 20.0]
 
 
 def test_annotation_accepts_xytext_in_annotate_kwargs() -> None:

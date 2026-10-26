@@ -1366,8 +1366,22 @@ def plot_with_projection(
     lon, lat = _get_display_grid(
         n_theta=n_theta, n_phi=n_phi, extent=display_extent,
     )
-    raster_extent = (-180.0, 180.0, -90.0, 90.0)
-    if display_extent is not None and display_extent != raster_extent:
+    global_extent = (-180.0, 180.0, -90.0, 90.0)
+    full_sky_grid = display_extent is None or display_extent == global_extent
+    if full_sky_grid:
+        # The full-sky longitude grid is periodic: its final sample is one
+        # step before the first sample at the wrap seam. The latitude samples
+        # lie just inside the poles. Imshow needs pixel edges around those
+        # centres and a repeated column at +180 to cover the wrap seam.
+        lon_step = float(lon[0, 1] - lon[0, 0])
+        lat_step = float(lat[1, 0] - lat[0, 0])
+        raster_extent = (
+            float(lon[0, 0] - lon_step / 2),
+            float(lon[0, 0] + 360.0 + lon_step / 2),
+            float(lat[0, 0] - lat_step / 2),
+            float(lat[-1, 0] + lat_step / 2),
+        )
+    else:
         lon_min, lon_max, lat_min, lat_max = display_extent
         lon_pad = (lon_max - lon_min) / (2 * (n_phi - 1)) if n_phi > 1 else 0.0
         lat_pad = (lat_max - lat_min) / (2 * (n_theta - 1)) if n_theta > 1 else 0.0
@@ -1473,12 +1487,15 @@ def plot_with_projection(
         # keeps mask regions and translucent map layers visually uniform.
         #
         # ``values`` is on an ascending latitude/longitude centre grid.
-        # Use its pixel boundaries for the image extent.
+        # Use its pixel boundaries for the image extent, repeating the first
+        # column at the full-sky wrap seam. The mesh keeps its original grid.
         # Retain the sampling resolution (or Cartopy's sensible 750-pixel
         # minimum for smaller preview grids) during the warp.
         image_vmin, image_vmax = vmin, vmax
         if not is_overlay_mask and (vmin is None or vmax is None):
             finite_values = np.asarray(values)[np.isfinite(values)]
+            if isinstance(norm, str) and norm == "log":
+                finite_values = finite_values[finite_values > 0]
             if finite_values.size:
                 if isinstance(norm, Normalize):
                     norm.autoscale_None(finite_values)
@@ -1491,8 +1508,13 @@ def plot_with_projection(
         source_crs = ccrs.PlateCarree()
         if ax.projection != source_crs:
             image_kwargs["regrid_shape"] = max(750, n_theta)
+        if full_sky_grid:
+            concatenate = np.ma.concatenate if np.ma.isMaskedArray(values) else np.concatenate
+            image_values = concatenate((values, values[:, :1]), axis=1)
+        else:
+            image_values = values
         quad = ax.imshow(
-            values,
+            image_values,
             transform=source_crs,
             extent=raster_extent,
             origin="lower",

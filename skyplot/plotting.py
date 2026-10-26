@@ -919,17 +919,19 @@ def gnomonic(
             map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
         )
         style.setdefault("zorder", _plotlib._annotation_zorder(ax))
-        previous = getattr(ax.figure, "_skyplot_payload", {})
+        previous = getattr(ax, "_skyplot_payload", {})
         if previous.get("projection") == "gnomonic":
             lon0_deg, lat0_deg = previous["projection_kwargs"]["center"]
         else:
             lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
         anchor = _gnomonic_forward(*xy, lon0_deg, lat0_deg)
         ax.annotate(label, xy=anchor, **style)
-        ax.figure._skyplot_payload = {  # type: ignore[attr-defined]
+        payload = {
             **previous, "plot_mode": "annotation",
             "annotation": {"text": label, "lon": xy[0], "lat": xy[1]},
         }
+        ax._skyplot_payload = payload  # type: ignore[attr-defined]
+        ax.figure._skyplot_payload = payload  # type: ignore[attr-defined]
         return PlotResult(ax.figure, ax)
     lon0_deg, lat0_deg = _resolve_gnomonic_center(center)
     is_overlay_mask = plot_mode == "overlay_mask"
@@ -1065,7 +1067,7 @@ def gnomonic(
     if title:
         ax.set_title(title)
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95) if ax.get_title() else None)
-    fig._skyplot_payload = {  # type: ignore[attr-defined]
+    payload = {
         "backend": "matplotlib-gnomonic", "projection": "gnomonic",
         "projection_kwargs": {"center": [lon0_deg, lat0_deg], "xsize": int(xsize), "ysize": int(ysize), "pixel_size_arcmin": float(pixel_size_arcmin), "astro_orientation": bool(astro_orientation)},
         "extent": [float(value) for value in extent], "shape": [int(values.shape[0]), int(values.shape[1])],
@@ -1078,6 +1080,8 @@ def gnomonic(
         "zorder": zorder,
         "colorbar_orientation": colorbar.orientation if add_colorbar else "horizontal",
     }
+    ax._skyplot_payload = payload  # type: ignore[attr-defined]
+    fig._skyplot_payload = payload  # type: ignore[attr-defined]
     return PlotResult(fig, ax)
 
 __all__ = [
