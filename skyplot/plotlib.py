@@ -917,9 +917,15 @@ def _resolve_annotation(
         style["alpha"] = alpha
     if zorder is not None:
         style["zorder"] = zorder
-    style.setdefault("zorder", 4.0)
     style.setdefault("clip_on", True)
     return text, xy, style
+
+
+def _annotation_zorder(ax: Any) -> float:
+    """Place a new annotation above the artists already on the axes."""
+    orders = (artist.get_zorder() for artist in ax.get_children())
+    finite_orders = (float(order) for order in orders if order is not None and np.isfinite(order))
+    return max(10.0, max(finite_orders, default=3.0) + 1.0)
 
 
 def _resolve_vector_maps(
@@ -1209,7 +1215,8 @@ def plot_with_projection(
         omitted; an explicitly supplied value is used unchanged.
     zorder : float or None, default=None
         Artist drawing order. Scalar maps default to 1, vector fields to 2,
-        and mask overlays to 3. An explicit value is used unchanged.
+        and mask overlays to 3. Annotations default above all existing axes
+        artists, with a minimum of 10. An explicit value is used unchanged.
     gridline_kwargs : dict or None, default=None
         Gridline option overrides.
     mesh_method : {"wrap", "mesh"}, default="wrap"
@@ -1266,6 +1273,7 @@ def plot_with_projection(
         label, xy, style = _resolve_annotation(
             map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
         )
+        style.setdefault("zorder", _annotation_zorder(ax))
         sky_coords = _get_cartopy_crs_module().PlateCarree()._as_mpl_transform(ax)
         style.setdefault("textcoords", sky_coords)
         ax.annotate(label, xy=xy, xycoords=sky_coords, **style)

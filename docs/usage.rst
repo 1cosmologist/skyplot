@@ -199,7 +199,11 @@ positive range. The notebook sets ``vmin=-500``, ``vmax=100000``, and
 
 The notebook loads the NPIPE temperature field, subtracts the CMB dipole and
 quadrupole, converts to microkelvin, and resamples a southern mask before
-plotting. Replace the paths below with your data files.
+plotting. It then labels the south patch at longitude -30 and latitude -10
+degrees on the displayed ICRS grid. ``plot_mode="annotation"`` takes a
+``(longitude, latitude, text)`` tuple and an existing map axes; use
+``annotate_kwargs`` for Matplotlib text styling. Replace the paths below with
+your data files.
 
 .. code-block:: python
 
@@ -238,11 +242,19 @@ plotting. Replace the paths below with your data files.
        ax=fig.ax,
    )
 
+   equidistantconic(
+       (-30.0, -10.0, "South patch"),
+       plot_mode="annotation",
+       ax=fig.ax,
+       annotate_kwargs={"color": "#8aff66", "fontsize": 18},
+   )
+
 .. figure:: figures/plancklognorm.png
-   :alt: NPIPE CMB map shown with PlanckLogNorm scaling and a translucent southern mask.
+   :alt: NPIPE CMB map with PlanckLogNorm scaling, a translucent southern mask, and a green South patch annotation.
    :width: 100%
 
-   The NPIPE map with ``PlanckLogNorm`` and the notebook's ``classic_dark`` theme.
+   The NPIPE map with ``PlanckLogNorm``, the ``classic_dark`` theme, and a
+   green annotation marking the south patch.
 
 Orthographic view
 -----------------

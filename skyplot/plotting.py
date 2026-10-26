@@ -918,6 +918,7 @@ def gnomonic(
         label, xy, style = _plotlib._resolve_annotation(
             map_data, annotate_kwargs, alpha=alpha, zorder=zorder,
         )
+        style.setdefault("zorder", _plotlib._annotation_zorder(ax))
         previous = getattr(ax.figure, "_skyplot_payload", {})
         if previous.get("projection") == "gnomonic":
             lon0_deg, lat0_deg = previous["projection_kwargs"]["center"]
